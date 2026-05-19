@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>人口密度 3Dマップ — Tokyo PDI Monitor</title>
+
+  <!-- MapLibre GL JS (ベースマップ担当) -->
+  <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
+
+  <!-- deck.gl (3D カラム担当) -->
+  <script src="https://unpkg.com/deck.gl@8.9.35/dist.min.js"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg:     #040810;
+      --panel:  rgba(4, 10, 24, 0.88);
+      --border: rgba(0, 210, 96, 0.18);
+      --acc:    #00d260;
+      --acc2:   rgba(0, 210, 96, 0.45);
+      --txt:    #b8eecb;
+      --dim:    rgba(184, 238, 203, 0.42);
+      --mono:   'Space Mono', monospace;
+      --jp:     'Noto Sans JP', sans-serif;
+    }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--txt); }
+
+    #map { position:absolute; inset:0; }
+
+    .maplibregl-ctrl-bottom-left,
+    .maplibregl-ctrl-bottom-right,
+    .maplibregl-ctrl-top-right { display:none; }
+
+    body::after {
+      content:''; position:fixed; inset:0; pointer-events:none; z-index:900;
+      background:repeating-linear-gradient(0deg, transparent 0px, transparent 3px, rgba(0,0,0,0.032) 3px, rgba(0,0,0,0.032) 4px);
+    }
+    body::before {
+      content:''; position:fixed; inset:0; pointer-events:none; z-index:901;
+      background:radial-gradient(ellipse at center, transparent 42%, rgba(2,5,18,0.68) 100%);
+    }
+
+    #hdr {
+      position:fixed; top:0; left:0; right:0; z-index:50; padding:14px 20px;
+      display:flex; align-items:center; justify-content:space-between;
+      background:linear-gradient(to bottom, rgba(4,10,24,0.96) 0%, transparent 100%);
+    }
+    .h-title { font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.22em; color:var(--acc); text-transform:uppercase; margin-bottom:3px; }
+    .h-sub   { font-family:var(--jp); font-size:11px; color:var(--dim); letter-spacing:0.03em; }
+    .badge   { display:flex; align-items:center; gap:8px; padding:5px 14px; background:var(--panel); border:1px solid var(--border); border-radius:3px; backdrop-filter:blur(10px); }
+    .dot     { width:6px; height:6px; border-radius:50%; background:var(--acc); box-shadow:0 0 8px var(--acc); animation:blink 2.4s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+    .badge-txt { font-family:var(--mono); font-size:9px; letter-spacing:0.12em; color:var(--dim); }
+
+    #stats { position:fixed; top:60px; right:14px; width:216px; z-index:50; background:var(--panel); border:1px solid var(--border); border-radius:4px; backdrop-filter:blur(16px); overflow:hidden; }
+    .p-hd  { padding:7px 12px; font-family:var(--mono); font-size:8px; letter-spacing:0.18em; color:var(--acc); text-transform:uppercase; border-bottom:1px solid var(--border); }
+    .r-row { display:flex; align-items:center; gap:6px; padding:5px 12px; border-bottom:1px solid rgba(0,210,96,0.07); transition:background .2s; }
+    .r-row:last-child { border-bottom:none; }
+    .r-row:hover { background:rgba(0,210,96,0.04); }
+    .r-n   { font-family:var(--mono); font-size:8px; color:var(--dim); width:13px; }
+    .r-w   { flex:1; font-family:var(--jp); font-size:11px; color:var(--txt); }
+    .r-bar { display:flex; align-items:center; gap:5px; }
+    .bar-bg { width:36px; height:2px; background:rgba(255,255,255,0.09); border-radius:1px; }
+    .bar-fg { height:100%; border-radius:1px; transition:width 1.2s ease; }
+    .r-v   { font-family:var(--mono); font-size:9px; color:var(--dim); width:42px; text-align:right; }
+
+    #legend { position:fixed; bottom:50px; left:14px; z-index:50; background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:10px 14px; backdrop-filter:blur(16px); }
+    .l-title { font-family:var(--mono); font-size:8px; letter-spacing:0.15em; color:var(--acc); margin-bottom:7px; }
+    .l-bar   { width:150px; height:8px; border-radius:4px; margin-bottom:5px; background:linear-gradient(to right, #18b454, #9ed010, #f09018, #e02020); }
+    .l-lbs   { display:flex; justify-content:space-between; font-family:var(--mono); font-size:8px; color:var(--dim); }
+
+    #prog      { position:fixed; bottom:38px; left:0; right:0; height:2px; z-index:50; background:rgba(0,210,96,0.07); }
+    #prog-fill { height:100%; background:linear-gradient(to right, var(--acc), rgba(0,210,96,0.35)); box-shadow:0 0 8px var(--acc); transition:width 1s linear; }
+    #sbar { position:fixed; bottom:0; left:0; right:0; height:38px; z-index:50; background:rgba(4,10,24,0.97); border-top:1px solid var(--border); display:flex; align-items:center; padding:0 16px; gap:26px; }
+    .s-it { display:flex; align-items:center; gap:6px; }
+    .s-l  { font-family:var(--mono); font-size:8px; letter-spacing:0.1em; color:var(--dim); text-transform:uppercase; }
+    .s-v  { font-family:var(--mono); font-size:10px; color:var(--txt); }
+    .s-a  { font-family:var(--mono); font-size:10px; color:var(--acc); }
+
+    #cfg  { position:fixed; bottom:50px; right:14px; width:260px; z-index:50; background:var(--panel); border:1px solid var(--border); border-radius:4px; backdrop-filter:blur(16px); overflow:hidden; }
+    .c-hd { display:flex; align-items:center; justify-content:space-between; padding:7px 12px; cursor:pointer; border-bottom:1px solid var(--border); }
+    .c-hd:hover { background:rgba(0,210,96,0.04); }
+    .c-bd { max-height:0; overflow:hidden; transition:max-height .35s ease; }
+    .c-bd.open { max-height:240px; }
+    .c-in { padding:12px; }
+    .c-lbl   { font-family:var(--mono); font-size:8px; letter-spacing:0.1em; color:var(--dim); margin-bottom:4px; }
+    .c-input { width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(0,210,96,0.22); border-radius:3px; color:var(--txt); font-family:var(--mono); font-size:9px; padding:6px 8px; outline:none; margin-bottom:8px; }
+    .c-input:focus { border-color:var(--acc); }
+    .c-btn  { background:rgba(0,210,96,0.1); border:1px solid var(--acc2); color:var(--acc); font-family:var(--mono); font-size:9px; padding:5px 14px; cursor:pointer; border-radius:3px; letter-spacing:0.1em; text-transform:uppercase; }
+    .c-btn:hover { background:rgba(0,210,96,0.2); }
+    .c-note { margin-top:10px; font-family:var(--jp); font-size:9.5px; color:var(--dim); line-height:1.65; }
+    .c-code { font-family:var(--mono); font-size:8px; color:var(--acc); }
+
+    #loading { position:fixed; inset:0; z-index:200; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; transition:opacity 0.8s ease; }
+    #loading.fade { opacity:0; pointer-events:none; }
+    .ld-title    { font-family:var(--mono); font-size:12px; letter-spacing:0.22em; color:var(--acc); text-transform:uppercase; }
+    .ld-bar-wrap { width:240px; height:2px; background:rgba(0,210,96,0.1); border-radius:1px; }
+    .ld-bar      { height:100%; border-radius:1px; background:var(--acc); box-shadow:0 0 8px var(--acc); width:0; transition:width 0.15s linear; }
+    .ld-sub      { font-family:var(--jp); font-size:10px; color:var(--dim); }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="ld-title">Population Density Monitor</div>
+  <div class="ld-bar-wrap"><div class="ld-bar" id="ld-bar"></div></div>
+  <div class="ld-sub" id="ld-msg">初期化中…</div>
+</div>
+
+<div id="map"></div>
+
+<header id="hdr">
+  <div>
+    <div class="h-title">Population Density Monitor</div>
+    <div class="h-sub">東京都 人口密度 3D リアルタイム可視化 — Google PDI</div>
+  </div>
+  <div class="badge">
+    <div class="dot"></div>
+    <span class="badge-txt" id="live-st">DEMO · PDI SIMULATION</span>
+  </div>
+</header>
+
+<aside id="stats">
+  <div class="p-hd">密度ランキング / TOP WARDS</div>
+  <div id="rank-list"></div>
+</aside>
+
+<div id="legend">
+  <div class="l-title">人口密度 · 人 / km²</div>
+  <div class="l-bar"></div>
+  <div class="l-lbs"><span>低 0</span><span>5k</span><span>10k</span><span>20k+ 高</span></div>
+</div>
+
+<div id="prog"><div id="prog-fill" style="width:100%"></div></div>
+<div id="sbar">
+  <div class="s-it"><span class="s-l">SOURCE</span><span class="s-v" id="sb-src">PDI SIMULATION</span></div>
+  <div class="s-it"><span class="s-l">UPDATED</span><span class="s-v" id="sb-time">—</span></div>
+  <div class="s-it"><span class="s-l">NEXT IN</span><span class="s-a" id="sb-next">30s</span></div>
+  <div class="s-it"><span class="s-l">CELLS</span><span class="s-v" id="sb-cells">—</span></div>
+</div>
+
+<div id="cfg">
+  <div class="c-hd" onclick="toggleCfg()">
+    <span class="p-hd" style="border:none;padding:0">⚙ API SETTINGS</span>
+    <span id="c-arrow" style="font-size:10px;color:var(--dim)">▾</span>
+  </div>
+  <div class="c-bd" id="c-body">
+    <div class="c-in">
+      <div class="c-lbl">BACKEND ENDPOINT URL</div>
+      <input class="c-input" id="c-url" type="text" placeholder="https://your-api.example.com/pdi/density">
+      <button class="c-btn" onclick="connectApi()">CONNECT</button>
+      <div class="c-note">
+        PDI は BigQuery ベースの API です。バックエンドで
+        <span class="c-code">google-cloud-bigquery</span> を使用し、
+        <span class="c-code">[{lat, lng, density, ward}]</span>
+        形式の JSON を返すエンドポイントを構築してください。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const INTERVAL_S = 30;
+const MAX_D      = 22500;
+const CELL_R     = 265;
+
+const WARDS = [
+  {ja:'豊島区',   lat:35.7295, lng:139.7109, d:22000, sp:0.023},
+  {ja:'中野区',   lat:35.7074, lng:139.6637, d:21000, sp:0.022},
+  {ja:'荒川区',   lat:35.7351, lng:139.7832, d:20600, sp:0.018},
+  {ja:'墨田区',   lat:35.7139, lng:139.8012, d:19800, sp:0.020},
+  {ja:'台東区',   lat:35.7118, lng:139.7825, d:19500, sp:0.018},
+  {ja:'文京区',   lat:35.7069, lng:139.7523, d:18700, sp:0.020},
+  {ja:'品川区',   lat:35.6094, lng:139.7303, d:18000, sp:0.030},
+  {ja:'板橋区',   lat:35.7511, lng:139.7197, d:17300, sp:0.030},
+  {ja:'新宿区',   lat:35.6939, lng:139.7034, d:17100, sp:0.022},
+  {ja:'北区',     lat:35.7527, lng:139.7337, d:16500, sp:0.028},
+  {ja:'渋谷区',   lat:35.6635, lng:139.6985, d:15800, sp:0.022},
+  {ja:'足立区',   lat:35.7757, lng:139.8044, d:15600, sp:0.040},
+  {ja:'葛飾区',   lat:35.7439, lng:139.8472, d:14200, sp:0.032},
+  {ja:'江戸川区', lat:35.7069, lng:139.8686, d:13400, sp:0.038},
+  {ja:'杉並区',   lat:35.6994, lng:139.6368, d:13000, sp:0.032},
+  {ja:'港区',     lat:35.6581, lng:139.7514, d:12500, sp:0.025},
+  {ja:'目黒区',   lat:35.6423, lng:139.6983, d:12300, sp:0.022},
+  {ja:'大田区',   lat:35.5613, lng:139.7160, d:11500, sp:0.042},
+  {ja:'世田谷区', lat:35.6467, lng:139.6531, d:11200, sp:0.040},
+  {ja:'練馬区',   lat:35.7357, lng:139.6528, d:10800, sp:0.036},
+  {ja:'江東区',   lat:35.6726, lng:139.8175, d:10500, sp:0.035},
+  {ja:'中央区',   lat:35.6702, lng:139.7730, d: 5700, sp:0.018},
+  {ja:'千代田区', lat:35.6938, lng:139.7532, d: 4400, sp:0.015},
+];
+
+// ── 色計算 ──────────────────────────────────────────────────────
+function hsl2rgb(h, s, l) {
+  const a = s * Math.min(l, 1 - l);
+  const f = n => { const k=(n+h/30)%12; return l-a*Math.max(Math.min(k-3,9-k,1),-1); };
+  return [Math.round(f(0)*255), Math.round(f(8)*255), Math.round(f(4)*255)];
+}
+function densityColor(d) {
+  const t = Math.min(Math.max(d / MAX_D, 0), 1);
+  return [...hsl2rgb((1-t)*128, 0.72+t*0.20, 0.37+(1-Math.pow(2*t-1,2))*0.08), 210];
+}
+
+// ── 密度モデル ───────────────────────────────────────────────────
+let noisePhase = 0;
+function calcDensity(lat, lng) {
+  let ws=0, ds=0;
+  for (const w of WARDS) {
+    const dy=lat-w.lat, dx=(lng-w.lng)*0.808;
+    const wt=Math.exp(-(dy*dy+dx*dx)/(2*w.sp*w.sp));
+    ws+=wt; ds+=wt*w.d;
+  }
+  const base=ws>1e-5?ds/ws:0;
+  const noise=Math.sin(lat*173.1+noisePhase*6.1)*Math.cos(lng*257.7+noisePhase*2.9);
+  return Math.max(200, Math.min(MAX_D, base*(1+0.045*noise)));
+}
+function nearestWard(lat, lng) {
+  let best=WARDS[0], bd=Infinity;
+  for (const w of WARDS) { const d=Math.hypot(lat-w.lat,(lng-w.lng)*0.808); if(d<bd){bd=d;best=w;} }
+  return best.ja;
+}
+
+// ── グリッド生成 ──────────────────────────────────────────────────
+function buildGrid() {
+  const pts=[], dLat=0.0046, dLng=0.0055; let row=0;
+  for (let lat=35.52; lat<=35.84; lat+=dLat, row++) {
+    const off=(row&1)?dLng*0.5:0;
+    for (let lng=139.50+off; lng<=139.98; lng+=dLng) {
+      const d=calcDensity(lat,lng);
+      if (d<700) continue;
+      pts.push({lat, lng, density:d, ward:nearestWard(lat,lng)});
+    }
+  }
+  return pts;
+}
+
+// ── deck.gl レイヤー ──────────────────────────────────────────────
+function makeColumnLayer(pts) {
+  return new deck.ColumnLayer({
+    id: 'pop', data: pts,
+    diskResolution: 6, radius: CELL_R,
+    extruded: true, pickable: true, elevationScale: 1,
+    getPosition:  d => [d.lng, d.lat],
+    getElevation: d => d.density * 0.30,
+    getFillColor: d => densityColor(d.density),
+    material: { ambient:0.42, diffuse:0.60, shininess:90, specularColor:[55,55,55] },
+    transitions: { getElevation:{duration:950}, getFillColor:{duration:750} },
+  });
+}
+
+// ── MapLibre + deck.gl 初期化 ──────────────────────────────────────
+let overlay;
+let gridData = buildGrid();
+
+function initMap() {
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    center: [139.693, 35.684],
+    zoom: 10.4,
+    pitch: 62,
+    bearing: -14,
+    antialias: true,
+  });
+
+  overlay = new deck.MapboxOverlay({
+    interleaved: false,
+    layers: [makeColumnLayer(gridData)],
+    getTooltip: ({ object }) => object && ({
+      html: `<div style="font-family:'Space Mono',monospace;font-size:11px;color:#b8eecb;line-height:1.9">
+        <div style="font-size:9px;color:#00d260;letter-spacing:.12em;margin-bottom:2px">▍ ${object.ward}</div>
+        <span style="font-size:15px;font-weight:700">${Math.round(object.density).toLocaleString('ja-JP')}</span>
+        <span style="color:rgba(184,238,203,.45);font-size:10px"> 人/km²</span>
+      </div>`,
+      style: {
+        background:'rgba(4,10,24,0.96)', border:'1px solid rgba(0,210,96,0.4)',
+        borderRadius:'4px', padding:'9px 13px', boxShadow:'0 4px 24px rgba(0,0,0,.5)',
+      },
+    }),
+  });
+
+  map.addControl(overlay);
+}
+
+// ── 統計パネル ────────────────────────────────────────────────────
+function updateStats(pts) {
+  const m={};
+  for (const p of pts) { if(!m[p.ward])m[p.ward]={s:0,n:0}; m[p.ward].s+=p.density; m[p.ward].n++; }
+  const rows=Object.entries(m).map(([w,v])=>({w,avg:v.s/v.n})).sort((a,b)=>b.avg-a.avg).slice(0,9);
+  const top=rows[0]?.avg||1;
+  document.getElementById('rank-list').innerHTML = rows.map((r,i) => {
+    const pct=(r.avg/top*100).toFixed(0);
+    const c=densityColor(r.avg);
+    return `<div class="r-row">
+      <span class="r-n">${i+1}</span><span class="r-w">${r.w}</span>
+      <div class="r-bar">
+        <div class="bar-bg"><div class="bar-fg" style="width:${pct}%;background:rgb(${c[0]},${c[1]},${c[2]})"></div></div>
+        <span class="r-v">${(r.avg/1000).toFixed(1)}k</span>
+      </div></div>`;
+  }).join('');
+}
+
+// ── データ更新 ────────────────────────────────────────────────────
+let apiUrl = null;
+async function refresh() {
+  noisePhase++;
+  let pts;
+  try {
+    if (apiUrl) {
+      const res=await fetch(apiUrl);
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      pts=await res.json();
+      document.getElementById('live-st').textContent='PDI LIVE · CONNECTED';
+      document.getElementById('sb-src').textContent='PDI API';
+    } else { pts=buildGrid(); }
+  } catch(e) {
+    pts=buildGrid();
+    if(apiUrl) document.getElementById('live-st').textContent='API ERROR · SIMULATION';
+  }
+  gridData=pts;
+  if(overlay) overlay.setProps({layers:[makeColumnLayer(pts)]});
+  updateStats(pts);
+  document.getElementById('sb-time').textContent=new Date().toLocaleTimeString('ja-JP',{hour12:false});
+  document.getElementById('sb-cells').textContent=pts.length.toLocaleString('ja-JP');
+}
+
+// ── カウントダウン ─────────────────────────────────────────────────
+let cnt=INTERVAL_S;
+setInterval(()=>{
+  cnt--; if(cnt<=0){cnt=INTERVAL_S;refresh();}
+  document.getElementById('prog-fill').style.width=(cnt/INTERVAL_S*100)+'%';
+  document.getElementById('sb-next').textContent=cnt+'s';
+},1000);
+
+// ── 設定UI ────────────────────────────────────────────────────────
+function toggleCfg(){
+  const b=document.getElementById('c-body'),a=document.getElementById('c-arrow');
+  b.classList.toggle('open'); a.textContent=b.classList.contains('open')?'▴':'▾';
+}
+function connectApi(){
+  const u=document.getElementById('c-url').value.trim();
+  apiUrl=u||null;
+  if(!apiUrl){document.getElementById('live-st').textContent='DEMO · PDI SIMULATION';document.getElementById('sb-src').textContent='PDI SIMULATION';}
+  refresh();
+}
+
+// ── 起動 ──────────────────────────────────────────────────────────
+(function boot(){
+  const bar=document.getElementById('ld-bar');
+  const msg=document.getElementById('ld-msg');
+  const ld=document.getElementById('loading');
+  const msgs=['グリッドデータを生成中…','密度モデルを計算中…','MapLibre GL を初期化中…','マップタイルを読み込み中…'];
+  let pct=0, step=0;
+  const iv=setInterval(()=>{
+    pct+=Math.random()*24+8; if(pct>100)pct=100;
+    bar.style.width=pct+'%';
+    if(step<msgs.length) msg.textContent=msgs[step++];
+    if(pct>=100){
+      clearInterval(iv);
+      setTimeout(()=>{
+        initMap(); refresh();
+        ld.classList.add('fade');
+        setTimeout(()=>ld.remove(),900);
+      },200);
+    }
+  },160);
+})();
+</script>
+</body>
+</html>
