@@ -3,295 +3,204 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>人口密度 3D山マップ</title>
+  <title>人口密度 100m マップ</title>
 
-  <!-- MapLibre を mapboxgl として読み込む (deck.gl が参照するため) -->
+  <!-- MapLibre (deck.gl が mapboxgl として参照) -->
   <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
-  <script>window.mapboxgl = maplibregl;</script>  <!-- ← deck.gl が mapboxgl を探すためのエイリアス -->
+  <script>window.mapboxgl = maplibregl;</script>
 
   <!-- deck.gl -->
   <script src="https://unpkg.com/deck.gl@8.9.35/dist.min.js"></script>
+
+  <!-- geotiff.js — COG をブラウザで部分読み込み -->
+  <script src="https://unpkg.com/geotiff@2.0.7/dist-browser/geotiff.browser.js"></script>
 
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
 
   <style>
     :root {
-      --bg:    #040810;
-      --panel: rgba(4, 10, 24, 0.90);
-      --bdr:   rgba(0, 210, 96, 0.18);
-      --acc:   #00d260;
-      --acc2:  rgba(0, 210, 96, 0.45);
-      --txt:   #b8eecb;
-      --dim:   rgba(184, 238, 203, 0.42);
-      --warn:  #f0a020;
-      --mono:  'Space Mono', monospace;
-      --jp:    'Noto Sans JP', sans-serif;
+      --bg:   #040810;
+      --pan:  rgba(4,10,24,.90);
+      --bdr:  rgba(0,210,96,.18);
+      --acc:  #00d260;
+      --ac2:  rgba(0,210,96,.45);
+      --txt:  #b8eecb;
+      --dim:  rgba(184,238,203,.42);
+      --wrn:  #f0a020;
+      --err:  #e04040;
+      --mono: 'Space Mono', monospace;
+      --jp:   'Noto Sans JP', sans-serif;
     }
-    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-    html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); }
-    #map { position:absolute; inset:0; }
-    .maplibregl-ctrl-bottom-left,
-    .maplibregl-ctrl-bottom-right,
-    .maplibregl-ctrl-top-right { display:none; }
-    body::after  { content:''; position:fixed; inset:0; pointer-events:none; z-index:900; background:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(0,0,0,.03) 3px,rgba(0,0,0,.03) 4px); }
-    body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index:901; background:radial-gradient(ellipse at center,transparent 40%,rgba(2,5,18,.7) 100%); }
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+    #map{position:absolute;inset:0}
+    .maplibregl-ctrl-bottom-left,.maplibregl-ctrl-bottom-right,.maplibregl-ctrl-top-right{display:none}
+    body::after {content:'';position:fixed;inset:0;pointer-events:none;z-index:900;background:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(0,0,0,.03) 3px,rgba(0,0,0,.03) 4px)}
+    body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:901;background:radial-gradient(ellipse at center,transparent 40%,rgba(2,5,18,.7) 100%)}
 
     /* HEADER */
-    #hdr { position:fixed;top:0;left:0;right:0;z-index:50;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(to bottom,rgba(4,10,24,.96) 0%,transparent 100%); }
-    .h-title { font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.22em;color:var(--acc);text-transform:uppercase;margin-bottom:3px; }
-    .h-sub   { font-family:var(--jp);font-size:11px;color:var(--dim); }
-    .badge   { display:flex;align-items:center;gap:8px;padding:5px 14px;background:var(--panel);border:1px solid var(--bdr);border-radius:3px;backdrop-filter:blur(10px); }
-    .dot     { width:6px;height:6px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc);animation:blink 2.4s ease-in-out infinite; }
+    #hdr{position:fixed;top:0;left:0;right:0;z-index:50;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(to bottom,rgba(4,10,24,.96) 0%,transparent 100%)}
+    .h-t{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.22em;color:var(--acc);text-transform:uppercase;margin-bottom:3px}
+    .h-s{font-family:var(--jp);font-size:11px;color:var(--dim)}
+    .badge{display:flex;align-items:center;gap:8px;padding:5px 14px;background:var(--pan);border:1px solid var(--bdr);border-radius:3px;backdrop-filter:blur(10px)}
+    .dot{width:6px;height:6px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc);animation:blink 2.4s ease-in-out infinite}
     @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
-    .badge-txt { font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--dim); }
+    .b-txt{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--dim)}
 
     /* GPS PANEL */
-    #gps-panel { position:fixed;top:60px;left:14px;z-index:50;width:230px;background:var(--panel);border:1px solid var(--bdr);border-radius:4px;backdrop-filter:blur(16px);overflow:hidden; }
-    .gp-sec  { padding:10px 12px;border-bottom:1px solid var(--bdr); }
-    .gp-sec:last-child { border-bottom:none; }
-    .gp-lbl  { font-family:var(--mono);font-size:8px;letter-spacing:.15em;color:var(--acc);text-transform:uppercase;margin-bottom:6px; }
-    .m-badge { display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:2px;font-family:var(--mono);font-size:8px;letter-spacing:.08em;margin-bottom:6px; }
-    .m-badge.gps     { background:rgba(0,210,96,.15);border:1px solid rgba(0,210,96,.35);color:var(--acc); }
-    .m-badge.ip      { background:rgba(240,160,32,.15);border:1px solid rgba(240,160,32,.35);color:var(--warn); }
-    .m-badge.manual  { background:rgba(100,160,255,.15);border:1px solid rgba(100,160,255,.35);color:#88aaff; }
-    .m-badge.wait    { background:rgba(100,100,100,.15);border:1px solid rgba(130,130,130,.3);color:var(--dim);animation:blink 1.2s infinite; }
-    .gp-row  { display:flex;align-items:center;gap:8px;margin-bottom:4px; }
-    .gp-icon { font-size:14px; }
-    .gp-place  { font-family:var(--jp);font-size:11px;color:var(--txt); }
-    .gp-coords { font-family:var(--mono);font-size:8px;color:var(--dim);margin-bottom:2px; }
-    .gp-acc    { font-family:var(--mono);font-size:8px;color:var(--warn); }
-    .gp-btns { display:flex;gap:6px; }
-    .gp-btn  { flex:1;background:rgba(0,210,96,.1);border:1px solid var(--acc2);color:var(--acc);font-family:var(--mono);font-size:8px;letter-spacing:.1em;padding:5px 4px;cursor:pointer;border-radius:3px;text-transform:uppercase;transition:background .2s; }
-    .gp-btn:hover { background:rgba(0,210,96,.22); }
-    .gp-btn:disabled { opacity:.35;cursor:not-allowed; }
-    .gp-btn.ip { color:var(--warn);border-color:rgba(240,160,32,.45);background:rgba(240,160,32,.08); }
-    .gp-btn.ip:hover { background:rgba(240,160,32,.18); }
-    .man-row { display:flex;gap:5px;align-items:center;margin-top:6px; }
-    .man-in  { flex:1;background:rgba(0,0,0,.5);border:1px solid rgba(0,210,96,.2);border-radius:3px;color:var(--txt);font-family:var(--mono);font-size:9px;padding:5px 7px;outline:none; }
-    .man-in:focus { border-color:var(--acc); }
-    .man-in::placeholder { color:var(--dim); }
-    .man-btn { background:rgba(100,160,255,.12);border:1px solid rgba(100,160,255,.4);color:#88aaff;font-family:var(--mono);font-size:8px;padding:5px 8px;cursor:pointer;border-radius:3px;text-transform:uppercase;letter-spacing:.08em; }
-    .man-btn:hover { background:rgba(100,160,255,.22); }
-    .gp-hint { font-family:var(--jp);font-size:9px;color:var(--dim);margin-top:5px;line-height:1.5; }
+    #gps{position:fixed;top:60px;left:14px;z-index:50;width:236px;background:var(--pan);border:1px solid var(--bdr);border-radius:4px;backdrop-filter:blur(16px);overflow:hidden}
+    .g-sec{padding:10px 12px;border-bottom:1px solid var(--bdr)}
+    .g-sec:last-child{border-bottom:none}
+    .g-lbl{font-family:var(--mono);font-size:8px;letter-spacing:.15em;color:var(--acc);text-transform:uppercase;margin-bottom:6px}
+    .g-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:2px;font-family:var(--mono);font-size:8px;letter-spacing:.08em;margin-bottom:6px}
+    .g-badge.gps   {background:rgba(0,210,96,.15);border:1px solid rgba(0,210,96,.35);color:var(--acc)}
+    .g-badge.ip    {background:rgba(240,160,32,.15);border:1px solid rgba(240,160,32,.35);color:var(--wrn)}
+    .g-badge.man   {background:rgba(100,160,255,.15);border:1px solid rgba(100,160,255,.35);color:#88aaff}
+    .g-badge.wait  {background:rgba(100,100,100,.15);border:1px solid rgba(130,130,130,.3);color:var(--dim);animation:blink 1.2s infinite}
+    .g-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+    .g-icon{font-size:14px}
+    .g-place{font-family:var(--jp);font-size:11px;color:var(--txt)}
+    .g-coords{font-family:var(--mono);font-size:8px;color:var(--dim);margin-bottom:2px}
+    .g-acc{font-family:var(--mono);font-size:8px;color:var(--wrn)}
+    .g-btns{display:flex;gap:6px}
+    .g-btn{flex:1;background:rgba(0,210,96,.1);border:1px solid var(--ac2);color:var(--acc);font-family:var(--mono);font-size:8px;letter-spacing:.1em;padding:5px 4px;cursor:pointer;border-radius:3px;text-transform:uppercase;transition:background .2s}
+    .g-btn:hover{background:rgba(0,210,96,.22)}
+    .g-btn:disabled{opacity:.35;cursor:not-allowed}
+    .g-btn.ip{color:var(--wrn);border-color:rgba(240,160,32,.45);background:rgba(240,160,32,.08)}
+    .g-btn.ip:hover{background:rgba(240,160,32,.18)}
+    .man-row{display:flex;gap:5px;align-items:center;margin-top:6px}
+    .man-in{flex:1;background:rgba(0,0,0,.5);border:1px solid rgba(0,210,96,.2);border-radius:3px;color:var(--txt);font-family:var(--mono);font-size:9px;padding:5px 7px;outline:none}
+    .man-in:focus{border-color:var(--acc)}
+    .man-in::placeholder{color:var(--dim)}
+    .man-btn{background:rgba(100,160,255,.12);border:1px solid rgba(100,160,255,.4);color:#88aaff;font-family:var(--mono);font-size:8px;padding:5px 8px;cursor:pointer;border-radius:3px;text-transform:uppercase;letter-spacing:.08em}
+    .man-btn:hover{background:rgba(100,160,255,.22)}
+    .g-hint{font-family:var(--jp);font-size:9px;color:var(--dim);margin-top:5px;line-height:1.5}
 
-    /* STATS */
-    #stats { position:fixed;top:60px;right:14px;width:216px;z-index:50;background:var(--panel);border:1px solid var(--bdr);border-radius:4px;backdrop-filter:blur(16px);overflow:hidden; }
-    .p-hd  { padding:7px 12px;font-family:var(--mono);font-size:8px;letter-spacing:.18em;color:var(--acc);text-transform:uppercase;border-bottom:1px solid var(--bdr); }
-    .r-row { display:flex;align-items:center;gap:6px;padding:5px 12px;border-bottom:1px solid rgba(0,210,96,.07);transition:background .2s; }
-    .r-row:last-child { border-bottom:none; }
-    .r-row:hover { background:rgba(0,210,96,.04); }
-    .r-n  { font-family:var(--mono);font-size:8px;color:var(--dim);width:13px; }
-    .r-w  { flex:1;font-family:var(--jp);font-size:11px;color:var(--txt); }
-    .r-bar { display:flex;align-items:center;gap:5px; }
-    .bar-bg { width:36px;height:2px;background:rgba(255,255,255,.09);border-radius:1px; }
-    .bar-fg { height:100%;border-radius:1px;transition:width 1.2s ease; }
-    .r-v  { font-family:var(--mono);font-size:9px;color:var(--dim);width:42px;text-align:right; }
+    /* DATA SOURCE PANEL */
+    #dsrc{position:fixed;top:60px;right:14px;width:216px;z-index:50;background:var(--pan);border:1px solid var(--bdr);border-radius:4px;backdrop-filter:blur(16px);overflow:hidden}
+    .p-hd{padding:7px 12px;font-family:var(--mono);font-size:8px;letter-spacing:.18em;color:var(--acc);text-transform:uppercase;border-bottom:1px solid var(--bdr)}
+
+    /* DENSITY INFO */
+    .d-row{display:flex;justify-content:space-between;align-items:center;padding:5px 12px;border-bottom:1px solid rgba(0,210,96,.07)}
+    .d-row:last-child{border-bottom:none}
+    .d-label{font-family:var(--jp);font-size:10px;color:var(--dim)}
+    .d-val{font-family:var(--mono);font-size:11px;color:var(--txt)}
+    .d-val.hi{color:#e04040}
+    .d-val.md{color:#f09018}
+    .d-val.lo{color:var(--acc)}
 
     /* LEGEND */
-    #legend { position:fixed;bottom:50px;left:14px;z-index:50;background:var(--panel);border:1px solid var(--bdr);border-radius:4px;padding:10px 14px;backdrop-filter:blur(16px); }
-    .l-title { font-family:var(--mono);font-size:8px;letter-spacing:.15em;color:var(--acc);margin-bottom:7px; }
-    .l-bar   { width:150px;height:8px;border-radius:4px;margin-bottom:5px;background:linear-gradient(to right,#18b454,#9ed010,#f09018,#e02020); }
-    .l-lbs   { display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:var(--dim); }
+    #legend{position:fixed;bottom:50px;left:14px;z-index:50;background:var(--pan);border:1px solid var(--bdr);border-radius:4px;padding:10px 14px;backdrop-filter:blur(16px)}
+    .l-t{font-family:var(--mono);font-size:8px;letter-spacing:.15em;color:var(--acc);margin-bottom:7px}
+    .l-b{width:150px;height:8px;border-radius:4px;margin-bottom:5px;background:linear-gradient(to right,#18b454,#9ed010,#f09018,#e02020)}
+    .l-l{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:var(--dim)}
 
-    /* STATUS BAR */
-    #prog      { position:fixed;bottom:38px;left:0;right:0;height:2px;z-index:50;background:rgba(0,210,96,.07); }
-    #prog-fill { height:100%;background:linear-gradient(to right,var(--acc),rgba(0,210,96,.35));box-shadow:0 0 8px var(--acc);transition:width 1s linear; }
-    #sbar { position:fixed;bottom:0;left:0;right:0;height:38px;z-index:50;background:rgba(4,10,24,.97);border-top:1px solid var(--bdr);display:flex;align-items:center;padding:0 16px;gap:22px; }
-    .s-it { display:flex;align-items:center;gap:6px; }
-    .s-l  { font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase; }
-    .s-v  { font-family:var(--mono);font-size:10px;color:var(--txt); }
-    .s-a  { font-family:var(--mono);font-size:10px;color:var(--acc); }
+    /* PROGRESS BAR */
+    #prog{position:fixed;bottom:38px;left:0;right:0;height:2px;z-index:50;background:rgba(0,210,96,.07)}
+    #pf{height:100%;background:linear-gradient(to right,var(--acc),rgba(0,210,96,.35));box-shadow:0 0 8px var(--acc);transition:width 1s linear}
+    #sbar{position:fixed;bottom:0;left:0;right:0;height:38px;z-index:50;background:rgba(4,10,24,.97);border-top:1px solid var(--bdr);display:flex;align-items:center;padding:0 16px;gap:20px}
+    .s-it{display:flex;align-items:center;gap:6px}
+    .s-l{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase}
+    .s-v{font-family:var(--mono);font-size:10px;color:var(--txt)}
+    .s-a{font-family:var(--mono);font-size:10px;color:var(--acc)}
 
     /* LOADING */
-    #loading { position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .8s ease; }
-    #loading.fade { opacity:0;pointer-events:none; }
-    .ld-t { font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--acc);text-transform:uppercase; }
-    .ld-bw { width:240px;height:2px;background:rgba(0,210,96,.1);border-radius:1px; }
-    .ld-b  { height:100%;border-radius:1px;background:var(--acc);box-shadow:0 0 8px var(--acc);width:0;transition:width .15s linear; }
-    .ld-s  { font-family:var(--jp);font-size:10px;color:var(--dim); }
+    #loading{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .8s ease}
+    #loading.fade{opacity:0;pointer-events:none}
+    .ld-t{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--acc);text-transform:uppercase}
+    .ld-bw{width:240px;height:2px;background:rgba(0,210,96,.1);border-radius:1px}
+    .ld-b{height:100%;border-radius:1px;background:var(--acc);box-shadow:0 0 8px var(--acc);width:0;transition:width .2s ease}
+    .ld-s{font-family:var(--jp);font-size:10px;color:var(--dim)}
   </style>
 </head>
 <body>
 
 <div id="loading">
-  <div class="ld-t">Population Density Monitor</div>
+  <div class="ld-t">Population Density · 100m Monitor</div>
   <div class="ld-bw"><div class="ld-b" id="ld-b"></div></div>
   <div class="ld-s" id="ld-s">初期化中…</div>
 </div>
 
 <div id="map"></div>
 
+<!-- HEADER -->
 <header id="hdr">
   <div>
-    <div class="h-title">Population Density · Mountain View</div>
-    <div class="h-sub">人口密度 3D 可視化 / Google PDI · GPS 連動</div>
+    <div class="h-t">Population Density · 100m Resolution</div>
+    <div class="h-s">WorldPop 100mメッシュ / GPS連動 リアルタイム</div>
   </div>
-  <div class="badge"><div class="dot"></div><span class="badge-txt" id="live-st">DEMO · SIMULATION</span></div>
+  <div class="badge"><div class="dot"></div><span class="b-txt" id="live-st">LOADING…</span></div>
 </header>
 
-<div id="gps-panel">
-  <div class="gp-sec">
-    <div class="gp-lbl">LOCATION</div>
-    <div id="m-badge" class="m-badge wait">⟳ &nbsp;取得中…</div>
-    <div class="gp-row"><span class="gp-icon" id="gp-icon">📡</span><span class="gp-place" id="gp-place">—</span></div>
-    <div class="gp-coords" id="gp-coords">— , —</div>
-    <div class="gp-acc" id="gp-acc"></div>
+<!-- GPS PANEL -->
+<div id="gps">
+  <div class="g-sec">
+    <div class="g-lbl">CURRENT LOCATION</div>
+    <div id="g-badge" class="g-badge wait">⟳ &nbsp;取得中…</div>
+    <div class="g-row"><span class="g-icon" id="g-icon">📡</span><span class="g-place" id="g-place">—</span></div>
+    <div class="g-coords" id="g-coords">— , —</div>
+    <div class="g-acc" id="g-acc"></div>
   </div>
-  <div class="gp-sec">
-    <div class="gp-btns">
-      <button class="gp-btn" id="btn-gps" onclick="tryGPS()" disabled>📍 GPS</button>
-      <button class="gp-btn ip" id="btn-ip" onclick="tryIP()" disabled>🌐 IP位置情報</button>
+  <div class="g-sec">
+    <div class="g-btns">
+      <button class="g-btn" id="btn-gps" onclick="tryGPS()" disabled>📍 GPS</button>
+      <button class="g-btn ip" id="btn-ip" onclick="tryIP()" disabled>🌐 IP位置情報</button>
     </div>
   </div>
-  <div class="gp-sec">
-    <div class="gp-lbl">手動入力</div>
+  <div class="g-sec">
+    <div class="g-lbl">手動入力 MANUAL</div>
     <div class="man-row">
       <input class="man-in" id="man-in" type="text" placeholder="35.6895, 139.6917">
       <button class="man-btn" onclick="applyManual()">SET</button>
     </div>
-    <div class="gp-hint">緯度, 経度 の形式で入力</div>
+    <div class="g-hint">緯度, 経度 の形式で入力</div>
   </div>
 </div>
 
-<aside id="stats">
-  <div class="p-hd">周辺 密度ランキング</div>
-  <div id="rank-list"></div>
-</aside>
-
-<div id="legend">
-  <div class="l-title">人口密度 · 人 / km²</div>
-  <div class="l-bar"></div>
-  <div class="l-lbs"><span>低 0</span><span>5k</span><span>10k</span><span>20k+ 高</span></div>
+<!-- DATA SOURCE INFO -->
+<div id="dsrc">
+  <div class="p-hd">データ情報 / DATA INFO</div>
+  <div class="d-row"><span class="d-label">データソース</span><span class="d-val" id="ds-src">—</span></div>
+  <div class="d-row"><span class="d-label">解像度</span><span class="d-val" id="ds-res">—</span></div>
+  <div class="d-row"><span class="d-label">最高密度</span><span class="d-val hi" id="ds-max">—</span></div>
+  <div class="d-row"><span class="d-label">平均密度</span><span class="d-val md" id="ds-avg">—</span></div>
+  <div class="d-row"><span class="d-label">ピクセル数</span><span class="d-val lo" id="ds-cnt">—</span></div>
 </div>
 
-<div id="prog"><div id="prog-fill" style="width:100%"></div></div>
+<!-- LEGEND -->
+<div id="legend">
+  <div class="l-t">人口密度 · 人 / km²</div>
+  <div class="l-b"></div>
+  <div class="l-l"><span>低 0</span><span>5k</span><span>10k</span><span>20k</span><span>40k+ 高</span></div>
+</div>
+
+<!-- STATUS BAR -->
+<div id="prog"><div id="pf" style="width:100%"></div></div>
 <div id="sbar">
-  <div class="s-it"><span class="s-l">SOURCE</span><span class="s-v" id="sb-src">SIMULATION</span></div>
-  <div class="s-it"><span class="s-l">CENTER</span><span class="s-v" id="sb-loc">—</span></div>
-  <div class="s-it"><span class="s-l">UPDATED</span><span class="s-v" id="sb-time">—</span></div>
-  <div class="s-it"><span class="s-l">NEXT IN</span><span class="s-a" id="sb-next">30s</span></div>
-  <div class="s-it"><span class="s-l">CELLS</span><span class="s-v" id="sb-cells">—</span></div>
+  <div class="s-it"><span class="s-l">SOURCE</span><span class="s-v" id="sb-src">—</span></div>
+  <div class="s-it"><span class="s-l">RADIUS</span><span class="s-v" id="sb-rad">5km</span></div>
+  <div class="s-it"><span class="s-l">UPDATED</span><span class="s-v" id="sb-t">—</span></div>
+  <div class="s-it"><span class="s-l">NEXT IN</span><span class="s-a" id="sb-n">30s</span></div>
+  <div class="s-it"><span class="s-l">CELLS</span><span class="s-v" id="sb-c">—</span></div>
 </div>
 
 <script>
 'use strict';
 
-// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
 //  定数
-// ══════════════════════════════════════════════════════
-const MAX_D       = 24000;
-const CELL_R      = 145;
-const GRID_DLAT   = 0.0028;
-const GRID_DLNG   = 0.0034;
-const GRID_RADIUS = 0.20;
-const INTERVAL_S  = 30;
+// ══════════════════════════════════════════════════
+const INTERVAL_S = 30;
+const MAX_D      = 45000;   // WorldPop 都市部の最高値に合わせて拡張
 
-// ══════════════════════════════════════════════════════
-//  人口密度センターデータ
-// ══════════════════════════════════════════════════════
-const CENTERS = [
-  // 東京23区
-  {n:'豊島区',    a:35.7295,o:139.7109,d:22000,s:0.018},
-  {n:'中野区',    a:35.7074,o:139.6637,d:21000,s:0.017},
-  {n:'荒川区',    a:35.7351,o:139.7832,d:20600,s:0.015},
-  {n:'墨田区',    a:35.7139,o:139.8012,d:19800,s:0.017},
-  {n:'台東区',    a:35.7118,o:139.7825,d:19500,s:0.014},
-  {n:'文京区',    a:35.7069,o:139.7523,d:18700,s:0.016},
-  {n:'品川区',    a:35.6094,o:139.7303,d:18000,s:0.025},
-  {n:'板橋区',    a:35.7511,o:139.7197,d:17300,s:0.025},
-  {n:'新宿区',    a:35.6939,o:139.7034,d:17100,s:0.018},
-  {n:'北区',      a:35.7527,o:139.7337,d:16500,s:0.022},
-  {n:'渋谷区',    a:35.6635,o:139.6985,d:15800,s:0.018},
-  {n:'足立区',    a:35.7757,o:139.8044,d:15600,s:0.035},
-  {n:'葛飾区',    a:35.7439,o:139.8472,d:14200,s:0.028},
-  {n:'江戸川区',  a:35.7069,o:139.8686,d:13400,s:0.032},
-  {n:'杉並区',    a:35.6994,o:139.6368,d:13000,s:0.028},
-  {n:'港区',      a:35.6581,o:139.7514,d:12500,s:0.020},
-  {n:'目黒区',    a:35.6423,o:139.6983,d:12300,s:0.018},
-  {n:'大田区',    a:35.5613,o:139.7160,d:11500,s:0.036},
-  {n:'世田谷区',  a:35.6467,o:139.6531,d:11200,s:0.035},
-  {n:'練馬区',    a:35.7357,o:139.6528,d:10800,s:0.030},
-  {n:'江東区',    a:35.6726,o:139.8175,d:10500,s:0.030},
-  {n:'中央区',    a:35.6702,o:139.7730,d: 5700,s:0.015},
-  {n:'千代田区',  a:35.6938,o:139.7532,d: 4400,s:0.012},
-  // 主要駅・商業地区
-  {n:'池袋',       a:35.7295,o:139.7109,d:24000,s:0.008},
-  {n:'新宿駅周辺', a:35.6896,o:139.7006,d:23000,s:0.007},
-  {n:'渋谷駅周辺', a:35.6580,o:139.7016,d:21000,s:0.007},
-  {n:'上野',       a:35.7141,o:139.7774,d:20000,s:0.008},
-  {n:'大久保',     a:35.7019,o:139.6995,d:22000,s:0.007},
-  {n:'高円寺',     a:35.7053,o:139.6499,d:20500,s:0.007},
-  {n:'三軒茶屋',   a:35.6436,o:139.6699,d:18000,s:0.007},
-  {n:'錦糸町',     a:35.6960,o:139.8154,d:19000,s:0.008},
-  {n:'北千住',     a:35.7494,o:139.8007,d:20000,s:0.008},
-  {n:'蒲田',       a:35.5636,o:139.7162,d:19000,s:0.008},
-  {n:'秋葉原',     a:35.7022,o:139.7741,d:16000,s:0.006},
-  {n:'吉祥寺',     a:35.7030,o:139.5797,d:14000,s:0.008},
-  {n:'蕨市',       a:35.8235,o:139.6804,d:14000,s:0.010},
-  // 東京市部
-  {n:'立川市',     a:35.6968,o:139.4138,d:6800,s:0.022},
-  {n:'西東京市',   a:35.7257,o:139.5383,d:7200,s:0.018},
-  {n:'三鷹市',     a:35.6834,o:139.5596,d:7500,s:0.015},
-  {n:'小金井市',   a:35.6993,o:139.5130,d:8500,s:0.012},
-  {n:'八王子市',   a:35.6660,o:139.3160,d:2800,s:0.050},
-  {n:'町田市',     a:35.5428,o:139.4460,d:4300,s:0.035},
-  // 神奈川県
-  {n:'横浜市',     a:35.4437,o:139.6380,d:8500,s:0.080},
-  {n:'横浜・鶴見', a:35.5176,o:139.6795,d:11000,s:0.018},
-  {n:'川崎市',     a:35.5308,o:139.7029,d:10500,s:0.050},
-  {n:'川崎区',     a:35.5311,o:139.7031,d:13000,s:0.015},
-  {n:'相模原市',   a:35.5713,o:139.3730,d:2200,s:0.060},
-  {n:'藤沢市',     a:35.3383,o:139.4916,d:3800,s:0.035},
-  {n:'大和市',     a:35.4592,o:139.4627,d:5000,s:0.020},
-  // 埼玉県
-  {n:'さいたま市', a:35.8617,o:139.6455,d:6100,s:0.060},
-  {n:'浦和',       a:35.8572,o:139.6455,d:9000,s:0.018},
-  {n:'大宮',       a:35.9063,o:139.6235,d:8500,s:0.018},
-  {n:'川口市',     a:35.8069,o:139.7241,d:9000,s:0.035},
-  {n:'草加市',     a:35.8277,o:139.8074,d:7000,s:0.022},
-  {n:'越谷市',     a:35.8898,o:139.7908,d:4500,s:0.028},
-  // 千葉県
-  {n:'千葉市',     a:35.6074,o:140.1065,d:3600,s:0.062},
-  {n:'千葉・稲毛', a:35.6363,o:140.1017,d:6000,s:0.018},
-  {n:'船橋市',     a:35.6946,o:139.9831,d:7400,s:0.035},
-  {n:'市川市',     a:35.7210,o:139.9316,d:8200,s:0.026},
-  {n:'松戸市',     a:35.7878,o:139.9026,d:8000,s:0.028},
-  {n:'浦安市',     a:35.6551,o:139.9058,d:8000,s:0.014},
-  {n:'柏市',       a:35.8677,o:139.9751,d:3700,s:0.035},
-  // 茨城県
-  {n:'水戸市',         a:36.3418,o:140.4468,d:1200,s:0.038},
-  {n:'水戸中心部',     a:36.3655,o:140.4710,d:2200,s:0.012},
-  {n:'ひたちなか市',   a:36.3964,o:140.5347,d:1630,s:0.024},
-  {n:'ひたちなか勝田', a:36.3851,o:140.5340,d:2400,s:0.009},
-  {n:'つくば市',       a:36.0833,o:140.0769,d: 850,s:0.048},
-  {n:'つくば研究学園', a:36.0825,o:140.1125,d:1500,s:0.012},
-  {n:'日立市',         a:36.5994,o:140.6514,d: 800,s:0.040},
-  {n:'土浦市',         a:36.0800,o:140.2040,d:1100,s:0.028},
-  {n:'古河市',         a:36.1942,o:139.7083,d:1150,s:0.028},
-  {n:'守谷市',         a:35.9500,o:139.9760,d:2000,s:0.022},
-  {n:'取手市',         a:35.9112,o:140.0557,d:1800,s:0.024},
-  {n:'牛久市',         a:35.9779,o:140.1494,d:1400,s:0.022},
-  {n:'龍ケ崎市',       a:35.9121,o:140.1829,d:1000,s:0.024},
-  {n:'鹿嶋市',         a:35.9660,o:140.6446,d: 550,s:0.022},
-  // 栃木・群馬
-  {n:'宇都宮市',   a:36.5549,o:139.8832,d:1250,s:0.055},
-  {n:'小山市',     a:36.3149,o:139.8026,d:1200,s:0.028},
-  {n:'前橋市',     a:36.3895,o:139.0634,d:1080,s:0.045},
-  {n:'高崎市',     a:36.3226,o:139.0030,d: 810,s:0.055},
-  // 東北・主要都市
-  {n:'いわき市',   a:37.0508,o:140.8878,d: 350,s:0.055},
-  {n:'郡山市',     a:37.3937,o:140.3847,d: 700,s:0.045},
-  {n:'仙台市',     a:38.2688,o:140.8721,d:1450,s:0.075},
-  {n:'大阪市',     a:34.6937,o:135.5023,d:12000,s:0.075},
-  {n:'名古屋市',   a:35.1815,o:136.9066,d: 7000,s:0.075},
-  {n:'札幌市',     a:43.0642,o:141.3469,d: 1800,s:0.085},
-  {n:'福岡市',     a:33.5904,o:130.4017,d: 4500,s:0.068},
-];
+// WorldPop 2020 Japan (100m / 3 arc-second COG)
+// CORS対応・HTTP Range対応のCloud Optimized GeoTIFF
+const WP_URL = 'https://data.worldpop.org/GIS/Population/Global_2000_2020_Constrained/2020/BSGM/JPN/jpn_ppp_2020_UNadj_constrained.tif';
 
-// ══════════════════════════════════════════════════════
-//  色計算 (緑→黄→赤)
-// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  色計算 (緑→赤、MAX_D=45000に対応)
+// ══════════════════════════════════════════════════
 function hsl2rgb(h, s, l) {
   const a = s * Math.min(l, 1 - l);
   const f = n => { const k=(n+h/30)%12; return l-a*Math.max(Math.min(k-3,9-k,1),-1); };
@@ -299,204 +208,263 @@ function hsl2rgb(h, s, l) {
 }
 function dColor(d) {
   const t = Math.min(Math.max(d / MAX_D, 0), 1);
-  return [...hsl2rgb((1-t)*128, 0.72+t*0.20, 0.37+(1-Math.pow(2*t-1,2))*0.08), 220];
+  return [...hsl2rgb((1-t)*128, 0.72+t*0.20, 0.37+(1-Math.pow(2*t-1,2))*0.08), 225];
+}
+function elev(d) {
+  // 1.3乗で密度差を強調 (高密度ほど急激に高く)
+  return Math.pow(Math.min(d / MAX_D, 1), 1.3) * 8000 + 20;
 }
 
-// ══════════════════════════════════════════════════════
-//  密度モデル (ガウス混合)
-// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  WorldPop COG 部分読み込み
+// ══════════════════════════════════════════════════
+let wpCache = null;      // { pts, centerLat, centerLng }
+let wpFetching = false;
+
+async function fetchWorldPop(centerLat, centerLng, radiusDeg = 0.046) {
+  // キャッシュヒット判定 (位置変化 <500m なら再利用)
+  if (wpCache &&
+      Math.abs(centerLat - wpCache.lat) < 0.005 &&
+      Math.abs(centerLng - wpCache.lng) < 0.005) {
+    return wpCache.pts;
+  }
+  if (wpFetching) return wpCache?.pts || null;
+  wpFetching = true;
+
+  setStatus('WorldPop COG を読み込み中…');
+  try {
+    // GeoTIFF ライブラリの取得 (unpkg では GeoTIFF がグローバルに展開される)
+    const GT = window.GeoTIFF || window.geotiff;
+    if (!GT) throw new Error('GeoTIFF library not loaded');
+
+    const tiff  = await GT.fromUrl(WP_URL, { allowFullFile: false });
+    const image = await tiff.getImage();
+
+    // 画像の地理情報
+    const bbox   = image.getBoundingBox();   // [west, south, east, north]
+    const width  = image.getWidth();
+    const height = image.getHeight();
+    const pxW    = (bbox[2] - bbox[0]) / width;   // 経度/ピクセル ≈ 0.000833°
+    const pxH    = (bbox[3] - bbox[1]) / height;  // 緯度/ピクセル ≈ 0.000833°
+
+    // 対象エリアのピクセルウィンドウ
+    const left   = Math.max(0,      Math.floor((centerLng - radiusDeg - bbox[0]) / pxW));
+    const top    = Math.max(0,      Math.floor((bbox[3] - (centerLat + radiusDeg)) / pxH));
+    const right  = Math.min(width,  Math.ceil ((centerLng + radiusDeg - bbox[0]) / pxW));
+    const bottom = Math.min(height, Math.ceil ((bbox[3] - (centerLat - radiusDeg)) / pxH));
+
+    const rasters = await image.readRasters({ window: [left, top, right, bottom] });
+    const data    = rasters[0];
+    const cols    = right - left;
+    const rows    = bottom - top;
+
+    // ピクセル面積 (km²) ← 緯度補正込み
+    const pxAreaKm2 = pxW * pxH * 111.32 * 111.32 * Math.cos(centerLat * Math.PI / 180);
+
+    const pts = [];
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const val = data[y * cols + x];
+        if (!val || val < 0.1 || !isFinite(val)) continue;
+        const lo  = bbox[0] + (left + x + 0.5) * pxW;
+        const la  = bbox[3] - (top  + y + 0.5) * pxH;
+        const d   = Math.min(val / pxAreaKm2, MAX_D);
+        pts.push({ la, lo, d, n: 'WorldPop 100m' });
+      }
+    }
+
+    wpCache = { pts, lat: centerLat, lng: centerLng };
+    wpFetching = false;
+    return pts;
+
+  } catch (e) {
+    console.warn('[WorldPop] fetch failed:', e.message);
+    wpFetching = false;
+    return null;  // null → シミュレーション fallback
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  フォールバック: ガウス混合シミュレーション (100mグリッド)
+// ══════════════════════════════════════════════════
+const CENTERS = [
+  {n:'豊島区',a:35.7295,o:139.7109,d:22000,s:0.018},{n:'中野区',a:35.7074,o:139.6637,d:21000,s:0.017},
+  {n:'荒川区',a:35.7351,o:139.7832,d:20600,s:0.015},{n:'墨田区',a:35.7139,o:139.8012,d:19800,s:0.017},
+  {n:'台東区',a:35.7118,o:139.7825,d:19500,s:0.014},{n:'文京区',a:35.7069,o:139.7523,d:18700,s:0.016},
+  {n:'品川区',a:35.6094,o:139.7303,d:18000,s:0.025},{n:'板橋区',a:35.7511,o:139.7197,d:17300,s:0.025},
+  {n:'新宿区',a:35.6939,o:139.7034,d:17100,s:0.018},{n:'北区',  a:35.7527,o:139.7337,d:16500,s:0.022},
+  {n:'渋谷区',a:35.6635,o:139.6985,d:15800,s:0.018},{n:'足立区',a:35.7757,o:139.8044,d:15600,s:0.035},
+  {n:'葛飾区',a:35.7439,o:139.8472,d:14200,s:0.028},{n:'江戸川区',a:35.7069,o:139.8686,d:13400,s:0.032},
+  {n:'杉並区',a:35.6994,o:139.6368,d:13000,s:0.028},{n:'港区',  a:35.6581,o:139.7514,d:12500,s:0.020},
+  {n:'目黒区',a:35.6423,o:139.6983,d:12300,s:0.018},{n:'大田区',a:35.5613,o:139.7160,d:11500,s:0.036},
+  {n:'世田谷区',a:35.6467,o:139.6531,d:11200,s:0.035},{n:'練馬区',a:35.7357,o:139.6528,d:10800,s:0.030},
+  {n:'江東区',a:35.6726,o:139.8175,d:10500,s:0.030},{n:'中央区',a:35.6702,o:139.7730,d:5700,s:0.015},
+  {n:'千代田区',a:35.6938,o:139.7532,d:4400,s:0.012},
+  {n:'池袋',a:35.7295,o:139.7109,d:24000,s:0.008},{n:'新宿駅',a:35.6896,o:139.7006,d:23000,s:0.007},
+  {n:'渋谷駅',a:35.6580,o:139.7016,d:21000,s:0.007},{n:'北千住',a:35.7494,o:139.8007,d:20000,s:0.008},
+  {n:'蒲田',a:35.5636,o:139.7162,d:19000,s:0.008},{n:'錦糸町',a:35.6960,o:139.8154,d:19000,s:0.008},
+  {n:'吉祥寺',a:35.7030,o:139.5797,d:14000,s:0.008},{n:'蕨市',a:35.8235,o:139.6804,d:14000,s:0.010},
+  {n:'川口市',a:35.8069,o:139.7241,d:9000,s:0.035},{n:'横浜市',a:35.4437,o:139.6380,d:8500,s:0.080},
+  {n:'川崎市',a:35.5308,o:139.7029,d:10500,s:0.050},{n:'さいたま市',a:35.8617,o:139.6455,d:6100,s:0.060},
+  {n:'千葉市',a:35.6074,o:140.1065,d:3600,s:0.062},{n:'船橋市',a:35.6946,o:139.9831,d:7400,s:0.035},
+  {n:'市川市',a:35.7210,o:139.9316,d:8200,s:0.026},{n:'松戸市',a:35.7878,o:139.9026,d:8000,s:0.028},
+  {n:'水戸市',a:36.3418,o:140.4468,d:1200,s:0.038},{n:'ひたちなか市',a:36.3964,o:140.5347,d:1630,s:0.024},
+  {n:'ひたちなか勝田',a:36.3851,o:140.5340,d:2400,s:0.009},{n:'つくば市',a:36.0833,o:140.0769,d:850,s:0.048},
+  {n:'宇都宮市',a:36.5549,o:139.8832,d:1250,s:0.055},{n:'仙台市',a:38.2688,o:140.8721,d:1450,s:0.075},
+  {n:'大阪市',a:34.6937,o:135.5023,d:12000,s:0.075},{n:'名古屋市',a:35.1815,o:136.9066,d:7000,s:0.075},
+  {n:'札幌市',a:43.0642,o:141.3469,d:1800,s:0.085},{n:'福岡市',a:33.5904,o:130.4017,d:4500,s:0.068},
+];
+
 let noisePhase = 0;
-function density(lat, lng) {
+function simDensity(la, lo) {
   let ws=0, ds=0;
   for (const c of CENTERS) {
-    const dy=lat-c.a, dx=(lng-c.o)*0.808;
-    const w = Math.exp(-(dy*dy+dx*dx)/(2*c.s*c.s));
+    const dy=la-c.a, dx=(lo-c.o)*0.808;
+    const w=Math.exp(-(dy*dy+dx*dx)/(2*c.s*c.s));
     ws+=w; ds+=w*c.d;
   }
-  const base = ws > 1e-5 ? ds/ws : 60;
-  const noise = Math.sin(lat*173.1+noisePhase*6.1)*Math.cos(lng*257.7+noisePhase*2.9);
+  const base=ws>1e-5?ds/ws:60;
+  const noise=Math.sin(la*173.1+noisePhase*6.1)*Math.cos(lo*257.7+noisePhase*2.9);
   return Math.max(50, Math.min(MAX_D, base*(1+0.04*noise)));
 }
-function nearest(lat, lng) {
-  let best=CENTERS[0], bd=Infinity;
-  for (const c of CENTERS) {
-    const d=Math.hypot(lat-c.a,(lng-c.o)*0.808);
-    if(d<bd){bd=d;best=c;}
-  }
-  return best.n;
-}
 
-// ══════════════════════════════════════════════════════
-//  グリッド生成
-// ══════════════════════════════════════════════════════
-let userLat=35.6895, userLng=139.6917;
-
-function buildGrid() {
+function buildSimGrid(centerLat, centerLng) {
+  // 100m グリッド (シミュレーション fallback)
+  const DLAT=0.0009, DLNG=0.0011, R=0.046;
   const pts=[];
   let row=0;
-  for (let la=userLat-GRID_RADIUS; la<=userLat+GRID_RADIUS; la+=GRID_DLAT, row++) {
-    const off=(row&1)?GRID_DLNG*0.5:0;
-    for (let lo=userLng-GRID_RADIUS*1.3+off; lo<=userLng+GRID_RADIUS*1.3; lo+=GRID_DLNG) {
-      pts.push({la, lo, d:density(la,lo), n:nearest(la,lo)});
-    }
+  for (let la=centerLat-R; la<=centerLat+R; la+=DLAT, row++) {
+    const off=(row&1)?DLNG*0.5:0;
+    for (let lo=centerLng-R*1.3+off; lo<=centerLng+R*1.3; lo+=DLNG)
+      pts.push({la, lo, d:simDensity(la,lo), n:'シミュレーション'});
   }
   return pts;
 }
 
-// ══════════════════════════════════════════════════════
-//  高さスケール (1.25乗で差を強調)
-// ══════════════════════════════════════════════════════
-function elev(d) {
-  return Math.pow(Math.min(d/MAX_D,1), 1.25) * 9000 + 30;
-}
-
-// ══════════════════════════════════════════════════════
-//  deck.gl 初期化
-//  ★ DeckGL standalone + mapStyle でシンプルに統合
-// ══════════════════════════════════════════════════════
-let gl = null;
-let userPt = [];  // GPS マーカー用
+// ══════════════════════════════════════════════════
+//  deck.gl
+// ══════════════════════════════════════════════════
+let gl       = null;
+let userPt   = [];
+let userLat  = 35.6895;
+let userLng  = 139.6917;
 
 function makeLayers(pts) {
+  // ピクセルサイズに合わせた六角形柱 (≈55m半径 @ 100mグリッド)
   return [
-    // 人口密度柱
     new deck.ColumnLayer({
-      id: 'pop',
-      data: pts,
+      id:'pop', data:pts,
       diskResolution: 6,
-      radius: CELL_R,
+      radius: 58,
       extruded: true,
       pickable: true,
       elevationScale: 1,
       getPosition:  d => [d.lo, d.la],
       getElevation: d => elev(d.d),
       getFillColor: d => dColor(d.d),
-      material: { ambient:0.35, diffuse:0.70, shininess:100, specularColor:[60,60,60] },
-      transitions: { getElevation:{duration:900}, getFillColor:{duration:700} },
+      material:{ambient:0.32,diffuse:0.72,shininess:120,specularColor:[50,50,50]},
+      transitions:{getElevation:{duration:900},getFillColor:{duration:700}},
     }),
-    // 現在地マーカー
     new deck.ScatterplotLayer({
-      id: 'user',
-      data: userPt,
+      id:'user', data:userPt,
       getPosition: d => [d.lo, d.la],
-      getRadius: 350,
-      radiusMinPixels: 8,
-      getFillColor: [0, 210, 96, 220],
-      getLineColor: [255, 255, 255, 255],
-      stroked: true,
-      lineWidthMinPixels: 2,
+      getRadius: 80, radiusMinPixels:8,
+      getFillColor:[0,210,96,230], getLineColor:[255,255,255,255],
+      stroked:true, lineWidthMinPixels:2,
     }),
   ];
 }
 
 function initDeck() {
   gl = new deck.DeckGL({
-    container: 'map',
-    mapStyle: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-    initialViewState: {
-      longitude: userLng,
-      latitude:  userLat,
-      zoom: 10.4,
-      pitch: 62,
-      bearing: -14,
-      maxPitch: 85,
-    },
-    controller: true,
+    container:'map',
+    mapStyle:'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    initialViewState:{longitude:userLng, latitude:userLat, zoom:13, pitch:62, bearing:-14, maxPitch:85},
+    controller:true,
     layers: makeLayers([]),
-    getTooltip: ({object}) => object && ({
-      html: `<div style="font-family:'Space Mono',monospace;font-size:11px;color:#b8eecb;line-height:1.9">
+    getTooltip:({object})=>object&&({
+      html:`<div style="font-family:'Space Mono',monospace;font-size:11px;color:#b8eecb;line-height:1.9">
         <div style="font-size:9px;color:#00d260;letter-spacing:.12em;margin-bottom:2px">▍ ${object.n}</div>
         <span style="font-size:15px;font-weight:700">${Math.round(object.d).toLocaleString('ja-JP')}</span>
         <span style="color:rgba(184,238,203,.45);font-size:10px"> 人/km²</span></div>`,
-      style: { background:'rgba(4,10,24,.96)', border:'1px solid rgba(0,210,96,.4)', borderRadius:'4px', padding:'9px 13px', boxShadow:'0 4px 24px rgba(0,0,0,.5)' },
+      style:{background:'rgba(4,10,24,.96)',border:'1px solid rgba(0,210,96,.4)',borderRadius:'4px',padding:'9px 13px',boxShadow:'0 4px 24px rgba(0,0,0,.5)'},
     }),
   });
 }
 
-function flyTo(lat, lng) {
+function flyTo(lat, lng, zoom=13) {
   if (!gl) return;
-  gl.setProps({
-    initialViewState: {
-      longitude: lng, latitude: lat,
-      zoom: 10.4, pitch: 62, bearing: -14,
-      transitionDuration: 1600,
-      transitionInterpolator: new deck.FlyToInterpolator({ speed: 1.5 }),
-    }
-  });
+  gl.setProps({initialViewState:{
+    longitude:lng, latitude:lat, zoom, pitch:62, bearing:-14,
+    transitionDuration:1600, transitionInterpolator:new deck.FlyToInterpolator({speed:1.5}),
+  }});
 }
 
-// ══════════════════════════════════════════════════════
-//  統計パネル
-// ══════════════════════════════════════════════════════
-function updateStats(pts) {
-  const m={};
-  for (const p of pts) {
-    if(!m[p.n])m[p.n]={s:0,c:0};
-    m[p.n].s+=p.d; m[p.n].c++;
-  }
-  const rows=Object.entries(m).map(([n,v])=>({n,avg:v.s/v.c})).sort((a,b)=>b.avg-a.avg).slice(0,9);
-  const top=rows[0]?.avg||1;
-  document.getElementById('rank-list').innerHTML=rows.map((r,i)=>{
-    const pct=(r.avg/top*100).toFixed(0);
-    const c=dColor(r.avg);
-    return `<div class="r-row">
-      <span class="r-n">${i+1}</span><span class="r-w">${r.n}</span>
-      <div class="r-bar">
-        <div class="bar-bg"><div class="bar-fg" style="width:${pct}%;background:rgb(${c[0]},${c[1]},${c[2]})"></div></div>
-        <span class="r-v">${(r.avg/1000).toFixed(1)}k</span>
-      </div></div>`;
-  }).join('');
-}
-
-// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
 //  データ更新
-// ══════════════════════════════════════════════════════
-let apiUrl = null;
+// ══════════════════════════════════════════════════
+function setStatus(msg) { document.getElementById('live-st').textContent = msg; }
+
+function updateInfoPanel(pts, srcLabel, resLabel) {
+  if (!pts.length) return;
+  const vals = pts.map(p=>p.d);
+  const mx   = Math.max(...vals);
+  const avg  = vals.reduce((a,b)=>a+b,0) / vals.length;
+  document.getElementById('ds-src').textContent = srcLabel;
+  document.getElementById('ds-res').textContent = resLabel;
+  document.getElementById('ds-max').textContent = Math.round(mx).toLocaleString('ja-JP') + ' 人/km²';
+  document.getElementById('ds-avg').textContent = Math.round(avg).toLocaleString('ja-JP') + ' 人/km²';
+  document.getElementById('ds-cnt').textContent = pts.length.toLocaleString('ja-JP') + ' px';
+  document.getElementById('sb-c').textContent   = pts.length.toLocaleString('ja-JP');
+}
 
 async function refresh() {
   noisePhase++;
-  let pts;
-  try {
-    if (apiUrl) {
-      const r=await fetch(apiUrl); if(!r.ok) throw 0;
-      pts=await r.json();
-      document.getElementById('live-st').textContent='PDI LIVE · CONNECTED';
-      document.getElementById('sb-src').textContent='PDI API';
-    } else { pts=buildGrid(); }
-  } catch { pts=buildGrid(); }
+  setStatus('データ取得中…');
+
+  // 1. WorldPop COG を試みる
+  let pts = await fetchWorldPop(userLat, userLng);
+  let src = 'WorldPop', res = '≈100m (2020)';
+
+  // 2. 失敗したらシミュレーション fallback
+  if (!pts || pts.length === 0) {
+    pts = buildSimGrid(userLat, userLng);
+    src = 'Simulation';
+    res = '≈100m グリッド';
+  }
 
   if (gl) gl.setProps({ layers: makeLayers(pts) });
-  updateStats(pts);
-  document.getElementById('sb-time').textContent=new Date().toLocaleTimeString('ja-JP',{hour12:false});
-  document.getElementById('sb-cells').textContent=pts.length.toLocaleString('ja-JP');
+  updateInfoPanel(pts, src, res);
+
+  document.getElementById('sb-src').textContent = src;
+  document.getElementById('sb-t').textContent   = new Date().toLocaleTimeString('ja-JP',{hour12:false});
+  setStatus(src === 'WorldPop' ? 'WorldPop · LIVE' : 'SIMULATION · FALLBACK');
 }
 
-// ══════════════════════════════════════════════════════
-//  位置情報 共通処理
-// ══════════════════════════════════════════════════════
-function setBtns(disabled) {
-  document.getElementById('btn-gps').disabled=disabled;
-  document.getElementById('btn-ip').disabled=disabled;
+// ══════════════════════════════════════════════════
+//  位置情報
+// ══════════════════════════════════════════════════
+function setBtns(dis) {
+  document.getElementById('btn-gps').disabled = dis;
+  document.getElementById('btn-ip').disabled  = dis;
 }
 function setBadge(cls, txt) {
-  const el=document.getElementById('m-badge');
-  el.className='m-badge '+cls; el.textContent=txt;
+  const el=document.getElementById('g-badge');
+  el.className='g-badge '+cls; el.textContent=txt;
 }
-function applyLocation(lat, lng, place, accTxt, icon, badgeCls, badgeTxt) {
-  userLat=lat; userLng=lng;
-  userPt=[{la:lat, lo:lng}];
-  document.getElementById('gp-place').textContent=place;
-  document.getElementById('gp-coords').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  document.getElementById('gp-acc').textContent=accTxt;
-  document.getElementById('gp-icon').textContent=icon;
-  document.getElementById('sb-loc').textContent=`${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-  setBadge(badgeCls, badgeTxt);
+function applyLoc(lat, lng, place, accTxt, icon, bcls, btxt) {
+  userLat=lat; userLng=lng; userPt=[{la:lat,lo:lng}];
+  document.getElementById('g-place').textContent  = place;
+  document.getElementById('g-coords').textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  document.getElementById('g-acc').textContent    = accTxt;
+  document.getElementById('g-icon').textContent   = icon;
+  setBadge(bcls, btxt);
+  wpCache = null;  // キャッシュクリア → 新位置でWorldPop再取得
   flyTo(lat, lng);
   refresh();
   setBtns(false);
 }
 
-// ── 逆ジオコーディング ──────────────────────────────
 async function revGeo(lat, lng) {
   try {
     const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ja`);
@@ -505,99 +473,82 @@ async function revGeo(lat, lng) {
   } catch { return `${lat.toFixed(3)}, ${lng.toFixed(3)}`; }
 }
 
-// ── GPS ────────────────────────────────────────────
 async function tryGPS() {
   setBtns(true); setBadge('wait','📍 GPS 取得中…');
-  document.getElementById('gp-place').textContent='取得中…';
-  if (!navigator.geolocation) {
-    setBadge('wait','GPS 非対応'); setBtns(false); tryIP(true); return;
-  }
+  document.getElementById('g-place').textContent='取得中…';
+  if (!navigator.geolocation) { setBadge('wait','GPS 非対応'); tryIP(true); return; }
   navigator.geolocation.getCurrentPosition(
-    async pos => {
-      const {latitude:la, longitude:lo, accuracy:ac} = pos.coords;
-      const place = await revGeo(la, lo);
-      applyLocation(la, lo, place, `精度 ±${Math.round(ac)}m`, '📍', 'gps', '✓ GPS');
+    async pos=>{
+      const {latitude:la,longitude:lo,accuracy:ac}=pos.coords;
+      const place=await revGeo(la,lo);
+      applyLoc(la,lo,place,`精度 ±${Math.round(ac)}m`,'📍','gps','✓ GPS');
     },
-    () => { setBadge('wait','GPS 失敗 → IP 試行中'); tryIP(true); },
-    { enableHighAccuracy:true, timeout:12000, maximumAge:0 }
+    ()=>{ setBadge('wait','GPS 失敗 → IP 試行中'); tryIP(true); },
+    {enableHighAccuracy:true,timeout:12000,maximumAge:0}
   );
 }
 
-// ── IP 位置情報 ────────────────────────────────────
 async function tryIP(silent=false) {
-  if (!silent) { setBtns(true); setBadge('wait','🌐 IP 取得中…'); }
+  if(!silent){setBtns(true);setBadge('wait','🌐 IP 取得中…');}
   try {
     const r=await fetch('https://ipapi.co/json/');
-    const j=await r.json();
-    if (!j.latitude) throw 0;
-    const la=parseFloat(j.latitude), lo=parseFloat(j.longitude);
+    const j=await r.json(); if(!j.latitude) throw 0;
+    const la=parseFloat(j.latitude),lo=parseFloat(j.longitude);
     const place=j.city||j.region||j.country_name||'不明';
-    applyLocation(la, lo, place, `${j.org||''} / ${j.country_name||''}`, '🌐', 'ip', '🌐 IP位置情報');
+    applyLoc(la,lo,place,`${j.org||''}`,'🌐','ip','🌐 IP位置情報');
   } catch {
     setBadge('wait','取得失敗 → 手動入力');
-    document.getElementById('gp-place').textContent='手動で座標を入力してください';
+    document.getElementById('g-place').textContent='座標を手動で入力してください';
     setBtns(false);
   }
 }
 
-// ── 手動入力 ───────────────────────────────────────
 async function applyManual() {
   const raw=document.getElementById('man-in').value.trim();
   const pts=raw.split(/[,\s]+/).map(Number).filter(n=>!isNaN(n));
-  if (pts.length<2) { document.getElementById('man-in').style.outline='1px solid #e04040'; setTimeout(()=>document.getElementById('man-in').style.outline='',1500); return; }
+  const mi=document.getElementById('man-in');
+  if(pts.length<2){mi.style.outline='1px solid #e04040';setTimeout(()=>mi.style.outline='',1500);return;}
   const [la,lo]=[pts[0],pts[1]];
-  if (la<20||la>50||lo<120||lo>150) { document.getElementById('gp-acc').textContent='座標が範囲外 (緯度20-50, 経度120-150)'; return; }
+  if(la<20||la>50||lo<120||lo>150){document.getElementById('g-acc').textContent='範囲外 (緯度20-50, 経度120-150)';return;}
   const place=await revGeo(la,lo);
-  applyLocation(la, lo, place, '手動入力', '✎', 'manual', '✎ 手動設定');
+  applyLoc(la,lo,place,'手動入力','✎','man','✎ 手動設定');
 }
 
-// ══════════════════════════════════════════════════════
-//  カウントダウン
-// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  カウントダウン & キーボード
+// ══════════════════════════════════════════════════
 let cnt=INTERVAL_S;
 setInterval(()=>{
   cnt--; if(cnt<=0){cnt=INTERVAL_S;refresh();}
-  document.getElementById('prog-fill').style.width=(cnt/INTERVAL_S*100)+'%';
-  document.getElementById('sb-next').textContent=cnt+'s';
+  document.getElementById('pf').style.width=(cnt/INTERVAL_S*100)+'%';
+  document.getElementById('sb-n').textContent=cnt+'s';
 },1000);
 
-// ══════════════════════════════════════════════════════
-//  キーボード
-// ══════════════════════════════════════════════════════
-document.addEventListener('keydown', e=>{ if(e.key==='Enter'&&document.activeElement===document.getElementById('man-in')) applyManual(); });
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&document.activeElement===document.getElementById('man-in')) applyManual();
+});
 
-// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
 //  起動シーケンス
-// ══════════════════════════════════════════════════════
-(function boot() {
+// ══════════════════════════════════════════════════
+(function boot(){
   const bar=document.getElementById('ld-b');
   const msg=document.getElementById('ld-s');
   const ld=document.getElementById('loading');
-  const steps=[
-    [20,  'deck.gl を初期化中…'],
-    [45,  '人口密度モデルを準備中…'],
-    [70,  'グリッドデータを生成中…'],
-    [90,  'マップタイルを読み込み中…'],
-    [100, '位置情報を取得中…'],
-  ];
+  const steps=[[25,'deck.gl 初期化中…'],[55,'geotiff.js 読み込み中…'],[80,'マップ準備中…'],[100,'位置情報を取得中…']];
   let i=0;
   const iv=setInterval(()=>{
-    if (i>=steps.length) { clearInterval(iv); return; }
-    const [pct, txt]=steps[i++];
-    bar.style.width=pct+'%';
-    msg.textContent=txt;
-    if (pct===100) {
+    if(i>=steps.length){clearInterval(iv);return;}
+    const [p,t]=steps[i++];
+    bar.style.width=p+'%'; msg.textContent=t;
+    if(p===100){
       clearInterval(iv);
-      // deck.gl 初期化
       initDeck();
-      // グリッド描画
-      refresh();
-      // ローディング解除
-      setTimeout(()=>{ ld.classList.add('fade'); setTimeout(()=>ld.remove(),900); },400);
-      // GPS 試行
-      setTimeout(()=>{ setBtns(false); tryGPS(); },800);
+      refresh();  // 初期描画 (東京でシミュレーション)
+      setTimeout(()=>{ld.classList.add('fade');setTimeout(()=>ld.remove(),900);},500);
+      setTimeout(()=>{setBtns(false);tryGPS();},900);
     }
-  }, 280);
+  },320);
 })();
 </script>
 </body>
