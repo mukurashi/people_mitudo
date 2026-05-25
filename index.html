@@ -15,248 +15,150 @@
 
 <style>
 :root {
-  --green: #00ff88;
-  --green-dim: rgba(0,255,136,.4);
-  --green-faint: rgba(0,255,136,.12);
-  --mono: 'Share Tech Mono', 'Courier New', monospace;
+  --g:   #00ff88;
+  --gd:  rgba(0,255,136,.4);
+  --mono: 'Share Tech Mono','Courier New',monospace;
 }
-*, *::before, *::after {
-  margin: 0; padding: 0; box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
-}
-html, body {
-  width: 100%; height: 100%;
-  background: #000;
-  overflow: hidden;
-  font-family: var(--mono);
-  touch-action: none;
-}
+*,*::before,*::after { margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent; }
+html,body { width:100%;height:100%;background:#000;overflow:hidden;touch-action:none; }
 
-/* ═══ CLI 起動画面 ═══════════════════════════════ */
+/* ══ BOOT ═════════════════════════════════════════ */
 #boot {
-  position: fixed; inset: 0; z-index: 100;
-  background: #000;
-  display: flex; flex-direction: column;
-  justify-content: flex-end;
-  padding: 0 0 env(safe-area-inset-bottom, 0px);
-  transition: opacity 1s ease;
+  position:fixed;inset:0;z-index:100;background:#000;
+  display:flex;flex-direction:column;justify-content:flex-end;
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  transition:opacity .9s ease;
 }
-#boot.fade-out { opacity: 0; pointer-events: none; }
-
+#boot.out { opacity:0;pointer-events:none; }
 #terminal {
-  padding: 20px 18px;
-  max-height: 100dvh;
-  overflow: hidden;
-  display: flex; flex-direction: column;
-  justify-content: flex-end;
+  padding:22px 18px 8px;
+  max-height:96dvh;
+  overflow:hidden;
+  display:flex;flex-direction:column;justify-content:flex-end;
 }
-
-/* ターミナル行 */
-.t-line {
-  font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-all;
+.tl { font-family:var(--mono);font-size:13px;line-height:1.72;white-space:pre-wrap;word-break:break-all; }
+.td  { color:rgba(0,255,136,.36); }
+.tn  { color:var(--g); }
+.tw  { color:#ffaa00; }
+.te  { color:#ff5555; }
+.th  { color:#fff;font-size:14px;letter-spacing:.04em; }
+.ta  { color:var(--g);letter-spacing:.04em; }
+#cur {
+  display:inline-block;width:9px;height:13px;
+  background:var(--g);vertical-align:middle;margin-left:2px;
+  box-shadow:0 0 8px var(--g);animation:cb .8s step-end infinite;
 }
-.t-dim    { color: rgba(0,255,136,.38); }
-.t-normal { color: var(--green); }
-.t-bright { color: #fff; }
-.t-ok     { color: var(--green); }
-.t-warn   { color: #ffaa00; }
-.t-error  { color: #ff5555; }
-.t-head   { color: #fff; font-size: 14px; letter-spacing: .04em; }
-
-/* カーソル */
-#cursor {
-  display: inline-block;
-  width: 9px; height: 14px;
-  background: var(--green);
-  vertical-align: middle;
-  margin-left: 2px;
-  box-shadow: 0 0 8px var(--green);
-  animation: blink .8s step-end infinite;
+@keyframes cb { 50%{opacity:0} }
+#sbtn {
+  display:none;margin:14px 18px;padding:16px;
+  background:rgba(0,255,136,.08);border:1px solid var(--gd);border-radius:4px;
+  color:var(--g);font-family:var(--mono);font-size:14px;letter-spacing:.06em;
+  text-align:center;cursor:pointer;
 }
-@keyframes blink { 50% { opacity: 0; } }
+#sbtn.show { display:block; }
+#sbtn:active { background:rgba(0,255,136,.20); }
 
-/* スタートボタン（GPS 許可前） */
-#start-btn {
-  display: none;
-  margin: 16px 18px;
-  padding: 16px;
-  background: var(--green-faint);
-  border: 1px solid var(--green-dim);
-  border-radius: 4px;
-  color: var(--green);
-  font-family: var(--mono);
-  font-size: 14px;
-  letter-spacing: .08em;
-  text-align: center;
-  cursor: pointer;
-  width: calc(100% - 36px);
-}
-#start-btn.show { display: block; }
-#start-btn:active { background: rgba(0,255,136,.22); }
-
-/* ═══ マップ ══════════════════════════════════════ */
-#map {
-  position: absolute; inset: 0;
-  opacity: 0;
-  transition: opacity 1s ease;
-}
-#map.visible { opacity: 1; }
-.maplibregl-ctrl-bottom-left,
-.maplibregl-ctrl-bottom-right,
-.maplibregl-ctrl-top-right { display: none; }
-
-/* スキャンライン */
+/* ══ MAP ══════════════════════════════════════════ */
+#map { position:absolute;inset:0;opacity:0;transition:opacity 1s ease; }
+#map.on { opacity:1; }
+.maplibregl-ctrl-bottom-left,.maplibregl-ctrl-bottom-right,.maplibregl-ctrl-top-right { display:none; }
 body::after {
-  content: ''; position: fixed; inset: 0;
-  pointer-events: none; z-index: 900;
-  background: repeating-linear-gradient(
-    0deg, transparent 0, transparent 3px,
-    rgba(0,0,0,.03) 3px, rgba(0,0,0,.03) 4px
-  );
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:800;
+  background:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(0,0,0,.035) 3px,rgba(0,0,0,.035) 4px);
 }
 
-/* ═══ マップ上 UI ════════════════════════════════ */
-/* ステータス（上） */
+/* ══ HUD (上) ═════════════════════════════════════ */
 #hud {
-  position: fixed; top: 0; left: 0; right: 0;
-  z-index: 50; pointer-events: none;
-  padding-top: env(safe-area-inset-top, 0px);
-  background: linear-gradient(to bottom, rgba(0,0,0,.85) 0%, transparent 100%);
+  position:fixed;top:0;left:0;right:0;z-index:50;pointer-events:none;
+  padding-top:env(safe-area-inset-top,0px);
+  background:linear-gradient(to bottom,rgba(0,0,0,.85) 0%,transparent 100%);
 }
-#hud-inner { padding: 10px 16px 14px; }
-#hud-loc {
-  font-family: var(--mono); font-size: 11px;
-  color: var(--green); letter-spacing: .04em;
-  margin-bottom: 2px;
-}
-#hud-info {
-  font-family: var(--mono); font-size: 10px;
-  color: rgba(0,255,136,.45);
-}
+#hud-inner { padding:10px 16px 14px; }
+#h1 { font-family:var(--mono);font-size:11px;color:var(--g);letter-spacing:.04em;margin-bottom:2px; }
+#h2 { font-family:var(--mono);font-size:10px;color:rgba(0,255,136,.45); }
 
-/* カウントダウンバー */
-#cbar {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  height: 3px; z-index: 50;
-  background: rgba(0,255,136,.08);
-}
-#cbar-fill {
-  height: 100%;
-  background: linear-gradient(to right, var(--green), rgba(0,255,136,.4));
-  box-shadow: 0 0 6px var(--green);
-  transition: width 1s linear;
-}
+/* ══ カウントダウンバー ══════════════════════════ */
+#cbar { position:fixed;bottom:0;left:0;right:0;height:3px;z-index:50;background:rgba(0,255,136,.07); }
+#cf   { height:100%;background:var(--g);box-shadow:0 0 6px var(--g);transition:width 1s linear; }
 
-/* FABボタン */
+/* ══ FAB ══════════════════════════════════════════ */
 #fabs {
-  position: fixed; z-index: 50;
-  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-  right: 16px;
-  display: flex; flex-direction: column; gap: 12px; align-items: flex-end;
+  position:fixed;z-index:50;
+  bottom:calc(18px + env(safe-area-inset-bottom,0px));
+  right:16px;
+  display:flex;flex-direction:column;gap:12px;align-items:flex-end;
 }
-.fab-row { display: flex; align-items: center; gap: 8px; }
-.fab-label {
-  font-family: var(--mono); font-size: 10px;
-  color: rgba(255,255,255,.45);
-  background: rgba(0,0,0,.6);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 4px; padding: 4px 8px;
-  white-space: nowrap;
+.fr { display:flex;align-items:center;gap:8px; }
+.fl {
+  font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.45);
+  background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.1);
+  border-radius:4px;padding:4px 8px;white-space:nowrap;
 }
 .fab {
-  width: 52px; height: 52px;
-  border-radius: 50%; border: 1.5px solid rgba(0,255,136,.35);
-  background: rgba(0,8,4,.85);
-  backdrop-filter: blur(10px);
-  color: var(--green); font-size: 21px;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 0 14px rgba(0,255,136,.12), 0 2px 12px rgba(0,0,0,.5);
+  width:52px;height:52px;border-radius:50%;border:1.5px solid rgba(0,255,136,.35);
+  background:rgba(0,8,4,.85);backdrop-filter:blur(10px);
+  color:var(--g);font-size:21px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  box-shadow:0 0 14px rgba(0,255,136,.12),0 2px 12px rgba(0,0,0,.5);
 }
-.fab:active { background: rgba(0,255,136,.15); transform: scale(.93); }
-.fab.spinning { animation: blink .5s step-end infinite; pointer-events: none; }
+.fab:active { background:rgba(0,255,136,.15);transform:scale(.93); }
+.fab.spin { animation:cb .5s step-end infinite;pointer-events:none; }
 
-/* 凡例 */
-#legend {
-  position: fixed; z-index: 50;
-  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-  left: 16px;
-  background: rgba(0,0,0,.6); backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 6px; padding: 8px 12px;
+/* ══ 凡例 ═════════════════════════════════════════ */
+#leg {
+  position:fixed;z-index:50;
+  bottom:calc(18px + env(safe-area-inset-bottom,0px));left:16px;
+  background:rgba(0,0,0,.62);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:8px 12px;
 }
-.l-bar {
-  width: 100px; height: 5px; border-radius: 2px;
-  background: linear-gradient(to right, #18b454, #9ed010, #f09018, #e02020);
-  margin-bottom: 4px;
-}
-.l-labels {
-  display: flex; justify-content: space-between;
-  font-family: var(--mono); font-size: 9px;
-  color: rgba(255,255,255,.35);
-}
+.lb { width:100px;height:5px;border-radius:2px;margin-bottom:4px;
+  background:linear-gradient(to right,#18b454,#9ed010,#f09018,#e02020); }
+.ll { display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.35); }
 
-/* トースト（エラー等） */
+/* ══ トースト ═════════════════════════════════════ */
 #toast {
-  position: fixed; z-index: 200;
-  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
-  left: 16px; right: 80px;
-  background: rgba(200,50,50,.9);
-  border-radius: 8px; padding: 10px 14px;
-  font-family: var(--mono); font-size: 12px;
-  color: #fff; line-height: 1.5;
-  display: none;
+  position:fixed;z-index:200;
+  bottom:calc(80px + env(safe-area-inset-bottom,0px));
+  left:16px;right:80px;
+  background:rgba(200,50,50,.9);border-radius:8px;
+  padding:10px 14px;font-family:var(--mono);font-size:12px;
+  color:#fff;line-height:1.5;display:none;
 }
-#toast.show { display: block; }
+#toast.on { display:block; }
 </style>
 </head>
 <body>
 
-<!-- ═══ CLI 起動画面 ═══════════════════════════════ -->
+<!-- BOOT -->
 <div id="boot">
-  <div id="terminal">
-    <!-- JS が行を追加していく -->
-  </div>
-  <!-- GPS 許可が必要な場合のみ表示 -->
-  <button id="start-btn" onclick="requestLocation()">
-    [ 位置情報へのアクセスを許可して開始 ]
-  </button>
+  <div id="terminal"></div>
+  <button id="sbtn" onclick="requestLoc()">[ 位置情報へのアクセスを許可して開始 ]</button>
 </div>
 
-<!-- ═══ マップ ═══════════════════════════════════════ -->
+<!-- MAP -->
 <div id="map"></div>
 
-<!-- ステータス -->
-<div id="hud">
-  <div id="hud-inner">
-    <div id="hud-loc">PDM // —</div>
-    <div id="hud-info">—</div>
-  </div>
-</div>
+<!-- HUD -->
+<div id="hud"><div id="hud-inner">
+  <div id="h1">PDM // —</div>
+  <div id="h2">—</div>
+</div></div>
 
 <!-- カウントダウン -->
-<div id="cbar"><div id="cbar-fill" style="width:100%"></div></div>
+<div id="cbar"><div id="cf" style="width:100%"></div></div>
 
-<!-- FAB ボタン -->
+<!-- FAB -->
 <div id="fabs">
-  <div class="fab-row">
-    <span class="fab-label">現在地に戻る</span>
-    <button class="fab" id="fab-gps" onclick="retryGPS()">📍</button>
-  </div>
-  <div class="fab-row">
-    <span class="fab-label">手動入力</span>
-    <button class="fab" onclick="promptManual()">✏️</button>
-  </div>
+  <div class="fr"><span class="fl">現在地に戻る</span>
+    <button class="fab" id="fg" onclick="retryGPS()">📍</button></div>
+  <div class="fr"><span class="fl">手動入力</span>
+    <button class="fab" onclick="manualInput()">✏️</button></div>
 </div>
 
 <!-- 凡例 -->
-<div id="legend">
-  <div class="l-bar"></div>
-  <div class="l-labels"><span>低(局所)</span><span>高(局所)</span></div>
+<div id="leg">
+  <div class="lb"></div>
+  <div class="ll"><span>低(局所)</span><span>高(局所)</span></div>
 </div>
 
 <!-- トースト -->
@@ -264,87 +166,57 @@ body::after {
 
 <script>
 'use strict';
-
-// ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 //  定数
-// ═══════════════════════════════════════════════
-const REFRESH = 30;   // 秒
-const MAX_D   = 25000; // 表示最大密度 (人/km²)
-const DLAT    = 0.004; // グリッド間隔
-const DLNG    = 0.004;
-const RADIUS  = 0.13;  // グリッド半径（度）
-const CELL_R  = 170;   // 柱半径(m)
+// ══════════════════════════════════════════════════════
+const REFRESH   = 30;
+const MAX_H     = 6000;   // 点群の最大高さ (m)
+const DLAT      = 0.004;
+const DLNG      = 0.004;
+const RADIUS    = 0.13;
+const CELL_R    = 180;    // セルの広がり半径 (m)
+const PTS_MIN   = 4;      // 低密度セルの最少点数
+const PTS_MAX   = 48;     // 高密度セルの最大点数
 
-// ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 //  状態
-// ═══════════════════════════════════════════════
-let gl = null, userLat = 35.6895, userLng = 139.6917;
-let userPt = [], noise = 0, cnt = REFRESH, cntId = null;
+// ══════════════════════════════════════════════════════
+let gl = null;
+let uLat = 35.6895, uLng = 139.6917;
+let noise = 0, cnt = REFRESH, cntId = null;
 
-// ═══════════════════════════════════════════════
-//  CLI ターミナル ユーティリティ
-// ═══════════════════════════════════════════════
-const term = document.getElementById('terminal');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-function addLine(text = '', cls = 't-normal') {
-  const div = document.createElement('div');
-  div.className = 't-line ' + cls;
-  div.textContent = text;
-  term.appendChild(div);
-  term.scrollTop = term.scrollHeight;
-  return div;
+// ══════════════════════════════════════════════════════
+//  CLI ターミナル
+// ══════════════════════════════════════════════════════
+const term = document.getElementById('terminal');
+let curEl = null;
+
+function addLine(txt='', cls='tn') {
+  const d = document.createElement('div');
+  d.className = 'tl ' + cls; d.textContent = txt;
+  term.appendChild(d); term.scrollTop = term.scrollHeight; return d;
+}
+async function typeLine(txt, cls='tn', spd=17) {
+  const d = addLine('', cls);
+  for (const c of txt) { d.textContent += c; await sleep(spd); }
+  term.scrollTop = term.scrollHeight; return d;
+}
+async function typeDots(label, cls='td', dots=18, spd=23) {
+  const d = addLine(label, cls);
+  for (let i=0;i<dots;i++) { d.textContent+='.'; await sleep(spd); } return d;
+}
+function cursor(parent) {
+  if (curEl) curEl.remove();
+  curEl = document.createElement('span'); curEl.id='cur';
+  (parent||term).appendChild(curEl);
 }
 
-async function typeLine(text, cls = 't-normal', speed = 18) {
-  const div = addLine('', cls);
-  for (const ch of text) {
-    div.textContent += ch;
-    await sleep(speed);
-  }
-  term.scrollTop = term.scrollHeight;
-  return div;
-}
-
-async function typeProgress(label, cls = 't-dim', dots = 20, speed = 25) {
-  const div = addLine(label, cls);
-  for (let i = 0; i < dots; i++) {
-    div.textContent += '.';
-    await sleep(speed);
-  }
-  return div;
-}
-
-// カーソルを最後の行の末尾に付ける
-let cursorEl = null;
-function showCursor(parentDiv) {
-  if (cursorEl) cursorEl.remove();
-  cursorEl = document.createElement('span');
-  cursorEl.id = 'cursor';
-  if (parentDiv) parentDiv.appendChild(cursorEl);
-  else term.appendChild(cursorEl);
-}
-
-// ═══════════════════════════════════════════════
-//  色 / 高さ計算
-// ═══════════════════════════════════════════════
-// d: 実密度(人/km²), t: 局所正規化値(0〜1)
-function dColor(d, t=0) {
-  const h = (1 - t) * 120, s = 0.76 + t * .18;
-  const l = 0.37 + (1 - Math.pow(2*t-1,2)) * .09;
-  const a = s * Math.min(l, 1-l);
-  const f = n => { const k=(n+h/30)%12; return l-a*Math.max(Math.min(k-3,9-k,1),-1); };
-  return [f(0)*255|0, f(8)*255|0, f(4)*255|0, 222];
-}
-// 高さも局所正規化値で計算 → どの地域でも高低差が明確に出る
-function dHeight(d, t=0) {
-  return Math.pow(t, 1.2) * 7500 + 25;
-}
-
-// ═══════════════════════════════════════════════
-//  密度モデル（ガウス混合）
-// ═══════════════════════════════════════════════
-const CENTERS = [
+// ══════════════════════════════════════════════════════
+//  密度モデル（ガウス混合 ＋ 多周波ノイズ）
+// ══════════════════════════════════════════════════════
+const CEN = [
   [35.7295,139.7109,22000,.022],[35.7074,139.6637,21000,.021],
   [35.7351,139.7832,20600,.017],[35.7139,139.8012,19800,.019],
   [35.7118,139.7825,19500,.016],[35.7069,139.7523,18700,.018],
@@ -375,62 +247,110 @@ const CENTERS = [
   [33.5904,130.4017, 4500,.070],
 ];
 
-function calcDensity(lat, lng) {
-  let ws = 0, ds = 0;
-  const cosLat = Math.cos(lat * Math.PI / 180);
-  for (const [clat, clng, d, sp] of CENTERS) {
-    const dy = lat - clat, dx = (lng - clng) * cosLat;
-    const w = Math.exp(-(dy*dy + dx*dx) / (2*sp*sp));
-    ws += w; ds += w * d;
+function rawDensity(lat, lng) {
+  let ws=0, ds=0;
+  const cl = Math.cos(lat * Math.PI/180);
+  for (const [la,lo,d,sp] of CEN) {
+    const dy=lat-la, dx=(lng-lo)*cl;
+    const w=Math.exp(-(dy*dy+dx*dx)/(2*sp*sp));
+    ws+=w; ds+=w*d;
   }
-  const base = ws > 1e-6 ? ds / ws : 80;
-  // 多周波ノイズ: 街区(~1km), ブロック(~300m), 細粒(~80m) の3スケール
-  const n1 = Math.sin(lat*890  + lng*1234) * Math.cos(lat*1567 + lng*678 ) * 0.35;
-  const n2 = Math.sin(lat*2670 + lng*3702) * Math.cos(lat*4701 + lng*2034) * 0.20;
-  const n3 = Math.sin(lat*8010 + lng*11106)* Math.cos(lat*14103+ lng*6102) * 0.10;
-  // 時間変動ノイズ（30秒更新用）
-  const nt = Math.sin(lat*173.1+noise*6.1) * Math.cos(lng*257.7+noise*2.9) * 0.05;
-  const factor = Math.max(0.25, 1 + n1 + n2 + n3 + nt);
-  return Math.max(80, Math.min(MAX_D, base * factor));
+  const base = ws>1e-6 ? ds/ws : 80;
+  // 多周波ノイズ（街区・ブロック・細粒）
+  const n1 = Math.sin(lat*890 +lng*1234)*Math.cos(lat*1567+lng*678 )*0.35;
+  const n2 = Math.sin(lat*2670+lng*3702)*Math.cos(lat*4701+lng*2034)*0.20;
+  const n3 = Math.sin(lat*8010+lng*11106)*Math.cos(lat*14103+lng*6102)*0.10;
+  const nt = Math.sin(lat*173.1+noise*6.1)*Math.cos(lng*257.7+noise*2.9)*0.05;
+  return Math.max(80, base * Math.max(0.25, 1+n1+n2+n3+nt));
 }
 
-function buildGrid(lat, lng) {
-  const raw = []; let row = 0;
-  for (let la = lat-RADIUS; la <= lat+RADIUS; la += DLAT, row++) {
-    const off = (row%2) * (DLNG/2);
-    for (let lo = lng-RADIUS*1.3+off; lo <= lng+RADIUS*1.3; lo += DLNG)
-      raw.push({ lat:la, lng:lo, d:calcDensity(la,lo) });
-  }
-  // ── 局所正規化: このグリッド内の最小〜最大をフル活用 ──
-  const vals   = raw.map(p => p.d);
-  const locMin = Math.min(...vals);
-  const locMax = Math.max(...vals);
-  const range  = locMax - locMin || 1;
-  raw.forEach(p => { p.t = (p.d - locMin) / range; }); // 0〜1 に正規化
-  return raw;
+// ══════════════════════════════════════════════════════
+//  点群生成
+//   座標: METER_OFFSETS（中心からのメートル差分）
+//   Z:    高さ (m)
+// ══════════════════════════════════════════════════════
+function ptColor(t, zFrac) {
+  // t: 正規化密度 0-1, zFrac: 柱内の高さ位置 0-1
+  const hue = (1-t)*120;
+  const sat = 0.68 + t*0.28;
+  const lig = 0.18 + zFrac*0.52;     // 下=暗い / 上=明るい → 奥行き感
+  const alp = (100 + zFrac*155)|0;   // 下=半透明 / 上=不透明
+  const a = sat*Math.min(lig,1-lig);
+  const f = n => { const k=(n+hue/30)%12; return lig-a*Math.max(Math.min(k-3,9-k,1),-1); };
+  return [(f(0)*255)|0,(f(8)*255)|0,(f(4)*255)|0,alp];
 }
 
-// ═══════════════════════════════════════════════
+function buildCloud(cLat, cLng) {
+  const cosLat = Math.cos(cLat*Math.PI/180);
+  const M_LAT  = 111000;  // 1° 緯度 ≈ 111km
+  const M_LNG  = M_LAT * cosLat;
+
+  // ── グリッド生成
+  const cells = []; let row=0;
+  for (let la=cLat-RADIUS; la<=cLat+RADIUS; la+=DLAT, row++) {
+    const off = (row%2)*(DLNG/2);
+    for (let lo=cLng-RADIUS*1.3+off; lo<=cLng+RADIUS*1.3; lo+=DLNG)
+      cells.push({ la, lo, d:rawDensity(la,lo) });
+  }
+
+  // ── 局所正規化（グリッド内の最小〜最大で 0-1 に）
+  const vals = cells.map(c=>c.d);
+  const dMin = Math.min(...vals), dMax = Math.max(...vals);
+  const rng  = dMax-dMin || 1;
+  cells.forEach(c => c.t = (c.d-dMin)/rng);
+
+  // ── 点群化
+  const pts = [];
+  for (const cell of cells) {
+    const { la, lo, d, t } = cell;
+    const eBase = (lo - cLng) * M_LNG;  // 東方向オフセット (m)
+    const nBase = (la - cLat) * M_LAT;  // 北方向オフセット (m)
+    const h     = Math.pow(t, 1.2) * MAX_H + 50;
+    const n     = PTS_MIN + Math.round(t * (PTS_MAX - PTS_MIN));
+
+    for (let i=0; i<n; i++) {
+      // セル内でランダム散布（一様円形分布）
+      const r     = CELL_R * Math.sqrt(Math.random());
+      const angle = Math.random() * Math.PI * 2;
+      // Z: 底を密に、上をまばらに（べき乗で分布）
+      const zFrac = Math.pow(Math.random(), 0.65);
+      const z     = zFrac * h;
+
+      pts.push({
+        pos: [eBase + r*Math.cos(angle), nBase + r*Math.sin(angle), z],
+        col: ptColor(t, zFrac),
+        d,
+      });
+    }
+  }
+  return { pts, cells, dMin, dMax };
+}
+
+// ══════════════════════════════════════════════════════
 //  deck.gl
-// ═══════════════════════════════════════════════
-function makeLayers(pts) {
+// ══════════════════════════════════════════════════════
+function makeLayers(pts, cLat, cLng) {
   return [
-    new deck.ColumnLayer({
-      id: 'pop', data: pts,
-      diskResolution: 6, radius: CELL_R,
-      extruded: true, pickable: true,
-      getPosition:  d => [d.lng, d.lat],
-      getElevation: d => dHeight(d.d, d.t || 0),
-      getFillColor: d => dColor(d.d, d.t || 0),
-      material: { ambient:.4, diffuse:.65, shininess:80 },
-      transitions: { getElevation:{duration:800}, getFillColor:{duration:600} },
+    // 点群レイヤー（METER_OFFSETS: 中心からのm差分 + 高さm）
+    new deck.PointCloudLayer({
+      id: 'cloud',
+      data: pts,
+      coordinateSystem: deck.COORDINATE_SYSTEM.METER_OFFSETS,
+      coordinateOrigin: [cLng, cLat],
+      getPosition: d => d.pos,
+      getColor:    d => d.col,
+      pointSize:   2.5,
+      pickable:    false,
+      parameters:  { depthTest: true, depthMask: false, blend: true },
     }),
+    // 現在地マーカー
     new deck.ScatterplotLayer({
-      id: 'me', data: userPt,
-      getPosition:  d => [d.lng, d.lat],
-      getRadius: 300, radiusMinPixels: 9,
+      id: 'me',
+      data: [{ lat: cLat, lng: cLng }],
+      getPosition: d => [d.lng, d.lat],
+      getRadius: 250, radiusMinPixels: 9,
       getFillColor: [0,220,120,230],
-      getLineColor: [255,255,255,255],
+      getLineColor:  [255,255,255,255],
       stroked: true, lineWidthMinPixels: 2.5,
     }),
   ];
@@ -442,18 +362,10 @@ function initDeck(lat, lng) {
     mapStyle: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
     initialViewState: {
       longitude: lng, latitude: lat,
-      zoom: 10, pitch: 55, bearing: 0, maxPitch: 80,
+      zoom: 10, pitch: 60, bearing: -10, maxPitch: 85,
     },
     controller: true,
-    layers: makeLayers([]),
-    getTooltip: ({object}) => object && ({
-      html: `<b style="font-size:15px">${Math.round(object.d).toLocaleString('ja-JP')}</b>
-             <span style="font-size:11px;color:rgba(255,255,255,.6)"> 人/km²</span>`,
-      style: {
-        background:'rgba(0,0,0,.85)', borderRadius:'6px',
-        padding:'8px 12px', color:'#fff', fontFamily:'system-ui,sans-serif',
-      },
-    }),
+    layers: [],
   });
 }
 
@@ -461,27 +373,24 @@ function flyTo(lat, lng) {
   if (!gl) return;
   gl.setProps({ initialViewState: {
     longitude: lng, latitude: lat,
-    zoom: 10, pitch: 55, bearing: 0,
+    zoom: 10, pitch: 60, bearing: -10,
     transitionDuration: 1200,
-    transitionInterpolator: new deck.FlyToInterpolator({ speed:1.5 }),
+    transitionInterpolator: new deck.FlyToInterpolator({ speed: 1.5 }),
   }});
 }
 
-// ═══════════════════════════════════════════════
-//  データ更新
-// ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+//  更新
+// ══════════════════════════════════════════════════════
 function refresh() {
   noise++;
-  const pts = buildGrid(userLat, userLng);
-  gl.setProps({ layers: makeLayers(pts) });
+  const { pts, cells, dMin, dMax } = buildCloud(uLat, uLng);
+  gl.setProps({ layers: makeLayers(pts, uLat, uLng) });
 
-  const mx  = Math.max(...pts.map(p => p.d));
-  const avg = pts.reduce((s,p) => s+p.d, 0) / pts.length;
   const now = new Date().toLocaleTimeString('ja-JP',{hour12:false});
-  document.getElementById('hud-loc').textContent =
-    `PDM // ${userLat.toFixed(4)}, ${userLng.toFixed(4)}`;
-  document.getElementById('hud-info').textContent =
-    `MAX ${Math.round(mx).toLocaleString()}/km²  AVG ${Math.round(avg).toLocaleString()}/km²  ${now}`;
+  document.getElementById('h1').textContent = `PDM // ${uLat.toFixed(4)}, ${uLng.toFixed(4)}`;
+  document.getElementById('h2').textContent =
+    `${pts.length.toLocaleString()} points  ·  局所密度 ${Math.round(dMin).toLocaleString()}-${Math.round(dMax).toLocaleString()} 人/km²  ·  ${now}`;
 }
 
 function startLoop() {
@@ -489,241 +398,175 @@ function startLoop() {
   cnt = REFRESH;
   cntId = setInterval(() => {
     cnt--;
-    if (cnt <= 0) { cnt = REFRESH; refresh(); }
-    document.getElementById('cbar-fill').style.width = (cnt/REFRESH*100) + '%';
+    if (cnt<=0) { cnt=REFRESH; refresh(); }
+    document.getElementById('cf').style.width = (cnt/REFRESH*100)+'%';
   }, 1000);
 }
 
-// ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 //  位置情報
-// ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 function getGPS() {
-  return new Promise((res, rej) => {
+  return new Promise((res,rej) => {
     if (!navigator.geolocation) { rej(new Error('GPS非対応')); return; }
     navigator.geolocation.getCurrentPosition(
-      p => res({ lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy) }),
-      e => rej(new Error(['','GPS使用が拒否されました','GPS取得エラー','GPSタイムアウト'][e.code] || 'GPSエラー')),
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      p => res({ lat:p.coords.latitude, lng:p.coords.longitude, acc:Math.round(p.coords.accuracy) }),
+      e => rej(new Error(['','GPS使用が拒否されました','GPS取得エラー','GPSタイムアウト'][e.code]||'GPSエラー')),
+      { enableHighAccuracy:true, timeout:12000, maximumAge:0 }
     );
   });
 }
-
 async function getIP() {
-  const r = await fetch('https://ipapi.co/json/');
-  const j = await r.json();
-  if (!j.latitude) throw new Error('IP位置情報取得失敗');
-  return { lat: parseFloat(j.latitude), lng: parseFloat(j.longitude), acc: null };
+  const r=await fetch('https://ipapi.co/json/');
+  const j=await r.json();
+  if(!j.latitude) throw new Error('IP位置情報取得失敗');
+  return { lat:parseFloat(j.latitude), lng:parseFloat(j.longitude), acc:null };
+}
+
+function toast(msg,ms=4000) {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('on');
+  setTimeout(()=>el.classList.remove('on'),ms);
 }
 
 async function applyLoc(lat, lng) {
-  userLat = lat; userLng = lng;
-  userPt  = [{ lat, lng }];
-  flyTo(lat, lng);
+  uLat=lat; uLng=lng;
+  flyTo(lat,lng);
   refresh();
   startLoop();
 }
 
-// ═══════════════════════════════════════════════
-//  FAB ボタン操作
-// ═══════════════════════════════════════════════
-function showToast(msg, ms = 4000) {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), ms);
-}
-
 async function retryGPS() {
-  const btn = document.getElementById('fab-gps');
-  btn.classList.add('spinning');
+  const btn=document.getElementById('fg');
+  btn.classList.add('spin');
   try {
-    const loc = await getGPS();
-    await applyLoc(loc.lat, loc.lng);
-  } catch (e) {
-    showToast(e.message);
+    const g=await getGPS();
+    await applyLoc(g.lat, g.lng);
+  } catch(e) { toast(e.message); }
+  btn.classList.remove('spin');
+}
+function manualInput() {
+  const v=prompt('緯度, 経度\n例: 35.6895, 139.6917');
+  if(!v)return;
+  const p=v.split(/[,\s]+/).map(Number).filter(n=>!isNaN(n));
+  if(p.length<2||p[0]<20||p[0]>50||p[1]<120||p[1]>150) {
+    toast('正しい座標を入力してください（緯度20-50、経度120-150）'); return;
   }
-  btn.classList.remove('spinning');
+  applyLoc(p[0],p[1]);
 }
 
-function promptManual() {
-  const v = prompt('緯度, 経度\n例: 35.6895, 139.6917');
-  if (!v) return;
-  const p = v.split(/[,\s]+/).map(Number).filter(n => !isNaN(n));
-  if (p.length < 2 || p[0]<20||p[0]>50||p[1]<120||p[1]>150) {
-    showToast('正しい座標を入力してください（緯度 20-50、経度 120-150）');
-    return;
-  }
-  applyLoc(p[0], p[1]);
-}
-
-// ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 //  CLI 起動シーケンス
-// ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 async function boot() {
-  const W   = Math.min(window.innerWidth, 460);
-  const HR  = '─'.repeat(Math.floor(W / 8.2));
+  const W  = Math.min(window.innerWidth,460);
+  const HR = '─'.repeat(Math.floor(W/8));
+  await sleep(180);
+  await typeLine(HR,'td',3);
+  await typeLine('  人口密度モニター  PDM v2.0','th',9);
+  await typeLine('  Population Density · Point Cloud','td',8);
+  await typeLine(HR,'td',3);
+  await sleep(100);
 
-  await sleep(200);
-
-  await typeLine(HR, 't-dim', 4);
-  await typeLine('  人口密度モニター  PDM v1.0', 't-head', 10);
-  await typeLine('  Population Density Monitor', 't-dim', 9);
-  await typeLine(HR, 't-dim', 4);
-  await sleep(120);
-
-  // INIT
   let d;
-  d = await typeProgress('  [INIT]  renderer', 't-dim', 18, 22);
-  initDeck(userLat, userLng); // ← 起動
-  d.textContent += ' OK'; d.className = 't-line t-ok';
-  await sleep(60);
+  d = await typeDots('  [INIT]  WebGL renderer','td',18,22);
+  initDeck(uLat,uLng);
+  d.textContent+=' OK'; d.className='tl tn'; await sleep(50);
 
-  d = await typeProgress('  [INIT]  basemap tiles', 't-dim', 18, 22);
-  d.textContent += ' OK'; d.className = 't-line t-ok';
-  await sleep(80);
+  d = await typeDots('  [INIT]  dark-matter basemap','td',16,22);
+  d.textContent+=' OK'; d.className='tl tn'; await sleep(50);
 
-  d = await typeProgress('  [INIT]  density model', 't-dim', 16, 22);
-  d.textContent += ` OK  (${CENTERS.length} centers)`;
-  d.className = 't-line t-ok';
-  await sleep(80);
+  d = await typeDots('  [INIT]  density model ('+CEN.length+' centers)','td',14,22);
+  d.textContent+=' OK'; d.className='tl tn'; await sleep(80);
 
   // GPS
-  await typeLine('', 't-dim');
-  const gpsLine = addLine('  [GPS ]  位置情報を取得中', 't-dim');
-  showCursor(gpsLine);
+  addLine('','td');
+  const gl1=addLine('  [GPS ]  位置情報を取得中','td'); cursor(gl1);
 
-  // GPS 取得（許可ダイアログが出るのでここで一時停止する可能性あり）
-  let loc = null;
-  let method = '';
-
-  try {
-    // iOS Safari はユーザー操作なしに GPS を呼べないことがある
-    // まず直接試みる
-    loc = await Promise.race([
-      getGPS(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 13000))
-    ]);
-    method = 'GPS';
-  } catch (gpsErr) {
-    // GPS 失敗 → スタートボタンを出す or IP
-    if (gpsErr.message.includes('拒否') || gpsErr.message.includes('denied')) {
-      // 許可拒否 → ユーザーに手動操作を求める
-      if (cursorEl) cursorEl.remove();
-      gpsLine.textContent = '  [GPS ]  ⚠ 許可が必要です';
-      gpsLine.className   = 't-line t-warn';
-      addLine('  [GPS ]  ブラウザの設定で位置情報を許可するか', 't-dim');
-      addLine('  [GPS ]  下のボタンをタップしてください', 't-dim');
-      document.getElementById('start-btn').classList.add('show');
-      // ボタン待ち（requestLocation が呼ばれるまで停止）
-      return;
-    }
-    // タイムアウト・その他 → IP にフォールバック
-    if (cursorEl) cursorEl.remove();
-    gpsLine.textContent = `  [GPS ]  FAILED: ${gpsErr.message}`;
-    gpsLine.className   = 't-line t-warn';
-
-    const ipLine = addLine('  [IP  ]  IP位置情報を取得中', 't-dim');
-    showCursor(ipLine);
+  const gpsP=(async()=>{
     try {
-      loc    = await getIP();
-      method = 'IP';
-      if (cursorEl) cursorEl.remove();
-      ipLine.textContent = `  [IP  ]  OK`;
-      ipLine.className   = 't-line t-ok';
-    } catch {
-      if (cursorEl) cursorEl.remove();
-      ipLine.textContent = '  [IP  ]  FAILED → default';
-      ipLine.className   = 't-line t-warn';
-      loc    = { lat: 35.6895, lng: 139.6917, acc: null };
-      method = 'default';
+      return await Promise.race([getGPS(),new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),13000))]);
+    } catch(e1) {
+      if(e1.message.includes('拒否')) return 'DENIED';
+      try { return await getIP(); } catch { return null; }
     }
+  })();
+
+  // スピナー
+  const sp=['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+  let si=0, spinning=true;
+  const spEl=document.createElement('span');
+  spEl.className='tl td'; spEl.textContent=' '+sp[0]; gl1.appendChild(spEl);
+  const spIv=setInterval(()=>{ if(spinning) spEl.textContent=' '+sp[si++%sp.length]; },80);
+
+  const loc=await gpsP;
+  spinning=false; clearInterval(spIv); spEl.remove(); if(curEl)curEl.remove();
+
+  if(loc==='DENIED') {
+    gl1.textContent='  [GPS ]  ⚠ 許可が必要です';
+    gl1.className='tl tw';
+    addLine('  [GPS ]  下のボタンをタップしてください','td');
+    document.getElementById('sbtn').classList.add('show');
+    return; // ボタン待ち
   }
 
-  await finishBoot(loc, method);
-}
-
-// GPS 許可ボタンが押されたとき
-async function requestLocation() {
-  document.getElementById('start-btn').classList.remove('show');
-  addLine('', 't-dim');
-  const line = addLine('  [GPS ]  位置情報を再取得中', 't-dim');
-  showCursor(line);
-  let loc, method;
-  try {
-    loc    = await getGPS();
-    method = 'GPS';
-    if (cursorEl) cursorEl.remove();
-    line.textContent = `  [GPS ]  OK`;
-    line.className   = 't-line t-ok';
-  } catch {
-    if (cursorEl) cursorEl.remove();
-    line.textContent = '  [GPS ]  FAILED → default';
-    line.className   = 't-line t-warn';
-    loc    = { lat: 35.6895, lng: 139.6917, acc: null };
-    method = 'default';
-  }
-  await finishBoot(loc, method);
-}
-
-async function finishBoot(loc, method) {
-  if (cursorEl) cursorEl.remove();
-
-  // GPS 結果表示
-  const gpsLine = term.querySelector('.t-line:last-of-type');
-  if (gpsLine && !gpsLine.textContent.includes('OK')) {
-    const l = addLine(`  [GPS ]  ${method}: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`, 't-ok');
-    if (loc.acc) { addLine(`  [GPS ]  accuracy: ±${loc.acc}m`, 't-dim'); }
+  if(loc) {
+    uLat=loc.lat; uLng=loc.lng;
+    const method = loc.acc!==undefined ? 'GPS' : 'IP';
+    gl1.textContent=`  [GPS ]  ${method}: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`;
+    gl1.className='tl tn';
+    if(loc.acc) addLine(`  [GPS ]  精度: ±${loc.acc}m`,'td');
+    flyTo(loc.lat,loc.lng);
   } else {
-    addLine(`  [GPS ]  ${method}: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`, 't-ok');
-    if (loc.acc) { addLine(`  [GPS ]  accuracy: ±${loc.acc}m`, 't-dim'); }
+    gl1.textContent='  [GPS ]  FAILED → default (Tokyo)';
+    gl1.className='tl tw';
   }
-
   await sleep(80);
+  await finishBoot();
+}
 
-  // グリッド構築
-  const gridLine = await typeProgress('  [DATA]  グリッドを生成中', 't-dim', 16, 24);
-  const pts = buildGrid(loc.lat, loc.lng);
-  gridLine.textContent += ` ${pts.length.toLocaleString()} cells`;
-  gridLine.className    = 't-line t-ok';
+async function requestLoc() {
+  document.getElementById('sbtn').classList.remove('show');
+  addLine('','td');
+  const l=addLine('  [GPS ]  再取得中','td'); cursor(l);
+  let loc=null;
+  try { loc=await getGPS(); } catch {}
+  if(curEl)curEl.remove();
+  if(loc) { uLat=loc.lat; uLng=loc.lng; l.textContent=`  [GPS ]  OK: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`; l.className='tl tn'; flyTo(loc.lat,loc.lng); }
+  else { l.textContent='  [GPS ]  FAILED → default'; l.className='tl tw'; }
   await sleep(60);
+  await finishBoot();
+}
 
-  const renderLine = await typeProgress('  [REND]  GPU へ転送中', 't-dim', 16, 24);
-  userLat = loc.lat; userLng = loc.lng;
-  userPt  = [{ lat: loc.lat, lng: loc.lng }];
-  gl.setProps({ layers: makeLayers(pts) });
-  flyTo(loc.lat, loc.lng);
-  renderLine.textContent += ' OK'; renderLine.className = 't-line t-ok';
-  await sleep(80);
+async function finishBoot() {
+  // 点群構築
+  const pg=await typeDots('  [DATA]  点群を生成中','td',16,26);
+  const { pts, cells, dMin, dMax } = buildCloud(uLat,uLng);
+  pg.textContent+=` ${pts.length.toLocaleString()} points`;
+  pg.className='tl tn'; await sleep(50);
 
-  // 完了
-  const W  = Math.min(window.innerWidth, 460);
-  const HR = '─'.repeat(Math.floor(W / 8.2));
-  addLine('', 't-dim');
-  await typeLine(HR, 't-dim', 4);
-  const readyLine = await typeLine('  READY', 't-head', 22);
-  showCursor(readyLine);
-  await sleep(500);
+  const rg=await typeDots('  [REND]  GPU へ転送中','td',16,24);
+  gl.setProps({ layers: makeLayers(pts, uLat, uLng) });
+  rg.textContent+=' OK'; rg.className='tl tn'; await sleep(80);
+
+  const W=Math.min(window.innerWidth,460);
+  addLine('  '+'─'.repeat(Math.floor(W/8)),'td');
+  const rl=await typeLine('  READY','ta',20);
+  cursor(rl); await sleep(500);
 
   // HUD 更新
-  const mx  = Math.max(...pts.map(p => p.d));
-  const avg = pts.reduce((s,p) => s+p.d, 0) / pts.length;
-  document.getElementById('hud-loc').textContent =
-    `PDM // ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`;
-  document.getElementById('hud-info').textContent =
-    `MAX ${Math.round(mx).toLocaleString()}/km²  AVG ${Math.round(avg).toLocaleString()}/km²`;
+  document.getElementById('h1').textContent=`PDM // ${uLat.toFixed(4)}, ${uLng.toFixed(4)}`;
+  document.getElementById('h2').textContent=
+    `${pts.length.toLocaleString()} points  ·  局所密度 ${Math.round(dMin).toLocaleString()}-${Math.round(dMax).toLocaleString()} 人/km²`;
 
-  // マップ表示 & 起動画面フェードアウト
-  document.getElementById('map').classList.add('visible');
+  document.getElementById('map').classList.add('on');
   startLoop();
-
   await sleep(600);
-  if (cursorEl) cursorEl.remove();
-  document.getElementById('boot').classList.add('fade-out');
-  setTimeout(() => document.getElementById('boot').remove(), 1100);
+  if(curEl)curEl.remove();
+  document.getElementById('boot').classList.add('out');
+  setTimeout(()=>document.getElementById('boot').remove(),1000);
 }
 
-// ═══════════════════════════════════════════════
-//  スタート
-// ═══════════════════════════════════════════════
 boot();
 </script>
 </body>
