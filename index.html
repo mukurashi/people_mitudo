@@ -256,7 +256,7 @@ body::after {
 <!-- 凡例 -->
 <div id="legend">
   <div class="l-bar"></div>
-  <div class="l-labels"><span>低密度</span><span>高密度</span></div>
+  <div class="l-labels"><span>低(局所)</span><span>高(局所)</span></div>
 </div>
 
 <!-- トースト -->
@@ -328,16 +328,17 @@ function showCursor(parentDiv) {
 // ═══════════════════════════════════════════════
 //  色 / 高さ計算
 // ═══════════════════════════════════════════════
-function dColor(d) {
-  const t = Math.min(Math.max(d / MAX_D, 0), 1);
+// d: 実密度(人/km²), t: 局所正規化値(0〜1)
+function dColor(d, t=0) {
   const h = (1 - t) * 120, s = 0.76 + t * .18;
   const l = 0.37 + (1 - Math.pow(2*t-1,2)) * .09;
   const a = s * Math.min(l, 1-l);
   const f = n => { const k=(n+h/30)%12; return l-a*Math.max(Math.min(k-3,9-k,1),-1); };
   return [f(0)*255|0, f(8)*255|0, f(4)*255|0, 222];
 }
-function dHeight(d) {
-  return Math.pow(Math.min(d/MAX_D,1), 1.3) * 7000 + 30;
+// 高さも局所正規化値で計算 → どの地域でも高低差が明確に出る
+function dHeight(d, t=0) {
+  return Math.pow(t, 1.2) * 7500 + 25;
 }
 
 // ═══════════════════════════════════════════════
@@ -382,19 +383,31 @@ function calcDensity(lat, lng) {
     const w = Math.exp(-(dy*dy + dx*dx) / (2*sp*sp));
     ws += w; ds += w * d;
   }
-  const base  = ws > 1e-6 ? ds / ws : 80;
-  const n     = Math.sin(lat*173.1+noise*6.1)*Math.cos(lng*257.7+noise*2.9);
-  return Math.max(80, Math.min(MAX_D, base * (1 + .04*n)));
+  const base = ws > 1e-6 ? ds / ws : 80;
+  // 多周波ノイズ: 街区(~1km), ブロック(~300m), 細粒(~80m) の3スケール
+  const n1 = Math.sin(lat*890  + lng*1234) * Math.cos(lat*1567 + lng*678 ) * 0.35;
+  const n2 = Math.sin(lat*2670 + lng*3702) * Math.cos(lat*4701 + lng*2034) * 0.20;
+  const n3 = Math.sin(lat*8010 + lng*11106)* Math.cos(lat*14103+ lng*6102) * 0.10;
+  // 時間変動ノイズ（30秒更新用）
+  const nt = Math.sin(lat*173.1+noise*6.1) * Math.cos(lng*257.7+noise*2.9) * 0.05;
+  const factor = Math.max(0.25, 1 + n1 + n2 + n3 + nt);
+  return Math.max(80, Math.min(MAX_D, base * factor));
 }
 
 function buildGrid(lat, lng) {
-  const pts = []; let row = 0;
+  const raw = []; let row = 0;
   for (let la = lat-RADIUS; la <= lat+RADIUS; la += DLAT, row++) {
     const off = (row%2) * (DLNG/2);
     for (let lo = lng-RADIUS*1.3+off; lo <= lng+RADIUS*1.3; lo += DLNG)
-      pts.push({ lat:la, lng:lo, d:calcDensity(la,lo) });
+      raw.push({ lat:la, lng:lo, d:calcDensity(la,lo) });
   }
-  return pts;
+  // ── 局所正規化: このグリッド内の最小〜最大をフル活用 ──
+  const vals   = raw.map(p => p.d);
+  const locMin = Math.min(...vals);
+  const locMax = Math.max(...vals);
+  const range  = locMax - locMin || 1;
+  raw.forEach(p => { p.t = (p.d - locMin) / range; }); // 0〜1 に正規化
+  return raw;
 }
 
 // ═══════════════════════════════════════════════
@@ -407,8 +420,8 @@ function makeLayers(pts) {
       diskResolution: 6, radius: CELL_R,
       extruded: true, pickable: true,
       getPosition:  d => [d.lng, d.lat],
-      getElevation: d => dHeight(d.d),
-      getFillColor: d => dColor(d.d),
+      getElevation: d => dHeight(d.d, d.t || 0),
+      getFillColor: d => dColor(d.d, d.t || 0),
       material: { ambient:.4, diffuse:.65, shininess:80 },
       transitions: { getElevation:{duration:800}, getFillColor:{duration:600} },
     }),
